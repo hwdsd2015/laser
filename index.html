@@ -1,0 +1,1756 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laser Room</title>
+<style>
+  :root {
+    --bg: #07070d;
+    --panel: #0e0f1a;
+    --panel-2: #151729;
+    --line: #25283f;
+    --text: #e8e9ff;
+    --muted: #8b8fb8;
+    --cyan: #6cf6ff;
+    --red: #ff3355;
+    --gold: #ffd75a;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+  body { display: flex; flex-direction: column; font: 14px/1.4 system-ui, -apple-system, sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  header {
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .brand { font-weight: 900; letter-spacing: 0.12em; font-size: 16px; }
+  .brand span { color: var(--red); text-shadow: 0 0 12px var(--red); margin-left: 4px; }
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    background: transparent; border: 1px solid transparent; border-radius: 8px;
+    padding: 7px 14px; color: var(--muted); font-weight: 600;
+  }
+  .tab:hover { color: var(--text); background: var(--panel-2); }
+  .tab.active { color: var(--bg); background: var(--cyan); box-shadow: 0 0 16px rgba(108, 246, 255, 0.35); }
+  .chip {
+    margin-left: auto; border: 1px solid var(--line); background: var(--panel-2);
+    border-radius: 999px; padding: 5px 12px; color: var(--gold); font-weight: 600; font-size: 13px;
+  }
+  .chip:hover { border-color: var(--gold); }
+
+  main { position: relative; flex: 1; display: flex; min-height: 0; }
+  #stage { flex: 1; display: flex; align-items: center; justify-content: center; min-width: 0; padding: 12px; }
+  canvas { display: block; touch-action: none; }
+
+  .page { position: absolute; inset: 0; overflow-y: auto; background: var(--bg); padding-inline: 16px; }
+  .page-inner { max-width: 980px; margin: 0 auto; padding-block: 28px 60px; }
+  .page h2 { font-size: 26px; margin: 0 0 4px; }
+  .page h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 28px 0 10px; }
+  .muted { color: var(--muted); margin: 0; }
+  .small { font-size: 12px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .card {
+    position: relative; text-align: left; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 14px; min-height: 92px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .card:hover { border-color: var(--cyan); }
+  .card .num { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .card .name { font-size: 16px; font-weight: 700; }
+  .card .best { font-size: 12px; color: var(--muted); margin-top: auto; font-variant-numeric: tabular-nums; }
+  .card .best.done { color: #7dff6b; }
+  .card .actions { display: flex; gap: 6px; margin-top: 8px; }
+  .card.new { align-items: center; justify-content: center; color: var(--cyan); border-style: dashed; font-weight: 700; }
+  .mini { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; font-size: 12px; }
+  .mini:hover { border-color: var(--cyan); }
+  .mini.danger:hover { border-color: var(--red); color: #ff8fa3; }
+  .card .edit-copy { position: absolute; top: 8px; right: 8px; }
+
+  .seg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .seg button {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 18px; min-width: 96px; display: flex; flex-direction: column; align-items: center;
+  }
+  .seg button b { font-size: 20px; }
+  .seg button span { font-size: 12px; color: var(--muted); }
+  .seg button:hover { border-color: var(--cyan); }
+  .seg button.active { border-color: var(--gold); background: rgba(255, 215, 90, 0.1); box-shadow: 0 0 18px rgba(255, 215, 90, 0.15); }
+  .seg button.active b { color: var(--gold); }
+
+  #editorPanel {
+    width: 330px; flex-shrink: 0; overflow-y: auto; background: var(--panel);
+    border-left: 1px solid var(--line); padding: 14px 16px 40px;
+  }
+  .ep-section { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .ep-section h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+  .ep-section h4.group { margin-top: 14px; }
+  .btnrow { display: flex; gap: 6px; margin-top: 8px; }
+  .btnrow button { flex: 1; }
+  .btn {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font-weight: 600;
+  }
+  .btn:hover { border-color: var(--cyan); }
+  .btn.primary { background: var(--cyan); color: var(--bg); border-color: var(--cyan); }
+  .btn.go { background: #7dff6b; color: var(--bg); border-color: #7dff6b; }
+  .btn.danger:hover { border-color: var(--red); color: #ff8fa3; }
+  input[type=text], textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 8px 10px; font: inherit;
+  }
+  input[type=text]:focus, textarea:focus { outline: none; border-color: var(--cyan); }
+  .presets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .presets button { font-size: 12px; padding: 8px 4px; }
+  .presets button i { display: block; font-style: normal; font-size: 16px; }
+  .row { display: grid; grid-template-columns: 78px 1fr 62px; align-items: center; gap: 8px; margin: 5px 0; }
+  .row label { color: var(--muted); font-size: 12px; }
+  .row input[type=range] { width: 100%; accent-color: var(--cyan); }
+  .row input[type=number] {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text);
+    border-radius: 6px; padding: 3px 5px; font: 12px ui-monospace, Menlo, monospace;
+  }
+  .row.check { grid-template-columns: 78px 1fr; }
+  .row.dim { opacity: 0.4; }
+  .toggle { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin: 4px 0; }
+  .toggle input { accent-color: var(--cyan); }
+  .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+  .swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; padding: 0; }
+  .swatch.active { border-color: #fff; box-shadow: 0 0 10px currentColor; }
+  .warn {
+    background: rgba(255, 51, 85, 0.12); border: 1px solid rgba(255, 51, 85, 0.5); color: #ffb3c1;
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 14px;
+  }
+  .placeholder { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 8px; }
+  .sel-head { display: flex; align-items: center; gap: 6px; }
+  .sel-head strong { flex: 1; }
+
+  dialog {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
+    width: min(560px, calc(100vw - 32px)); padding: 18px;
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+  dialog h3 { margin: 0 0 10px; }
+  dialog textarea { height: 280px; font: 12px ui-monospace, Menlo, monospace; resize: vertical; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: var(--cyan); color: var(--bg); font-weight: 700; padding: 8px 16px; border-radius: 999px;
+    opacity: 0; transition: 0.2s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+
+  @media (max-width: 820px) {
+    main.editing { flex-direction: column; }
+    #editorPanel { width: auto; height: 48%; border-left: 0; border-top: 1px solid var(--line); }
+    .chip { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">LASER<span>ROOM</span></div>
+  <nav class="tabs">
+    <button class="tab active" data-view="play">Play</button>
+    <button class="tab" data-view="levels">Levels</button>
+    <button class="tab" data-view="speed">Speed</button>
+    <button class="tab" data-view="editor">Editor</button>
+  </nav>
+  <button class="chip" id="speedChip" title="Change speed"></button>
+</header>
+
+<main id="main">
+  <div id="stage"><canvas id="game"></canvas></div>
+
+  <aside id="editorPanel" hidden>
+    <div class="ep-section">
+      <h4>Level</h4>
+      <input type="text" id="levelName" maxlength="40" placeholder="Level name">
+      <div class="btnrow">
+        <button class="btn" id="edNew">New</button>
+        <button class="btn primary" id="edSave">Save</button>
+        <button class="btn go" id="edTest">▶ Test</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="edExport">Export</button>
+        <button class="btn" id="edImport">Import</button>
+        <button class="btn danger" id="edClear">Clear</button>
+      </div>
+    </div>
+
+    <div class="ep-section">
+      <h4>Add</h4>
+      <div class="presets">
+        <button class="btn" data-preset="static" title="A laser that doesn't move"><i>━</i>Static</button>
+        <button class="btn" data-preset="hinge" title="A beam that rotates around one of its ends"><i>⟳</i>Hinge</button>
+        <button class="btn" data-preset="spinner" title="A beam that rotates around its middle"><i>↻</i>Spinner</button>
+        <button class="btn" data-preset="cross"><i>✚</i>Cross</button>
+        <button class="btn" data-preset="slider"><i>↕</i>Slider</button>
+        <button class="btn" data-preset="sweeper"><i>◠</i>Swinger</button>
+        <button class="btn" data-preset="blinker"><i>┊</i>Blinker</button>
+        <button class="btn" data-preset="orbiter"><i>◎</i>Orbiter</button>
+        <button class="btn" data-preset="wall" title="Solid block the player can't walk through. Blocks lasers too."><i>■</i>Wall</button>
+      </div>
+    </div>
+
+    <div class="ep-section">
+      <h4>Preview</h4>
+      <label class="toggle"><input type="checkbox" id="edAnimate" checked> Animate lasers</label>
+      <label class="toggle"><input type="checkbox" id="edSnap" checked> Snap to grid when dragging</label>
+      <div class="row">
+        <label for="edTime">Time</label>
+        <input type="range" id="edTime" min="0" max="20" step="0.05" value="0">
+        <button class="mini" id="edTimeReset">Reset</button>
+      </div>
+    </div>
+
+    <div class="warn" id="edWarn" hidden></div>
+
+    <div id="props"></div>
+  </aside>
+
+  <section class="page" id="levelsView" hidden>
+    <div class="page-inner">
+      <h2>Levels</h2>
+      <p class="muted">Pick a level to play. Campaign levels continue on to the next one when you clear them.</p>
+      <h3>Campaign</h3>
+      <div class="cards" id="campaignCards"></div>
+      <h3>Your levels</h3>
+      <div class="cards" id="customCards"></div>
+    </div>
+  </section>
+
+  <section class="page" id="speedView" hidden>
+    <div class="page-inner">
+      <h2>Speed</h2>
+      <p class="muted">Slow the lasers down to make levels easier, or crank them up for a challenge.</p>
+      <h3>Laser speed</h3>
+      <div class="seg" id="laserSeg"></div>
+      <h3>Player speed</h3>
+      <div class="seg" id="playerSeg"></div>
+      <p class="muted small" style="margin-top:24px">Best times are tracked separately for each speed combination.</p>
+    </div>
+  </section>
+</main>
+
+<dialog id="jsonDialog">
+  <h3 id="jsonTitle">Export</h3>
+  <p class="muted small" id="jsonHint" style="margin-bottom:10px"></p>
+  <textarea id="jsonText" spellcheck="false"></textarea>
+  <div class="btnrow">
+    <button class="btn" id="jsonCopy">Copy</button>
+    <button class="btn primary" id="jsonLoad">Load level</button>
+    <button class="btn" id="jsonClose">Close</button>
+  </div>
+</dialog>
+<div id="toast"></div>
+
+<script>
+// @@CORE-BEGIN
+const W = 960, H = 600, HUD = 60, WALL = 30;
+const ROOM = { x0: WALL, y0: WALL, x1: W - WALL, y1: H - WALL };
+const START_X = 70, START_Y = H / 2, EXIT_X = 870;
+const PLAYER_R = 12, PLAYER_SPEED = 230, BEAM_HALF = 4;
+const TAU = Math.PI * 2, P2 = Math.PI / 2;
+
+/*
+ * Laser fields:
+ *   x, y                    home pivot position
+ *   len, arms, a            beam length, number of beams from the pivot, base angle (rad).
+ *                           arms: 1 = beam pivots around one end, 2 = straight beam pivoting around its middle
+ *   spin                    constant rotation (rad/s); no spin/sweep/movement = stationary laser
+ *   sweep, sweepSpeed,      swing back and forth: amplitude (rad), speed, offset
+ *   sweepPhase
+ *   mx, my, period, phase   pivot moves ±mx/±my over `period` seconds; orbit = circular path
+ *   blink, on, off,         turns on/off; compact form in level data: blink: [on, off, phase]
+ *   blinkPhase
+ *   color
+ * Walls: { x, y, w, h } solid rectangles. Players can't enter them and they stop laser beams.
+ */
+const RED = '#ff3355', ORANGE = '#ff8a3d', GOLD = '#ffd75a', GREEN = '#7dff6b', CYAN = '#33e1ff', PURPLE = '#c94dff';
+
+const BUILTIN_LEVELS = [
+  {
+    name: 'Warm Up',
+    lasers: [
+      { x: 340, y: 300, my: 150, period: 3.2, a: P2, arms: 2, len: 150, color: RED },
+      { x: 620, y: 300, my: 150, period: 3.2, phase: 0.5, a: P2, arms: 2, len: 150, color: RED },
+      { x: 480, y: 300, spin: 0.8, arms: 2, len: 90, color: ORANGE },
+    ],
+  },
+  {
+    name: 'Spin Cycle',
+    lasers: [
+      { x: 300, y: 180, spin: 1.3, arms: 2, len: 125, color: RED },
+      { x: 300, y: 420, spin: -1.3, arms: 2, len: 125, color: RED },
+      { x: 660, y: 180, spin: -1.3, a: 0.8, arms: 2, len: 125, color: RED },
+      { x: 660, y: 420, spin: 1.3, a: 0.8, arms: 2, len: 125, color: RED },
+      { x: 480, y: 300, spin: 2.0, arms: 3, len: 60, color: ORANGE },
+    ],
+    // Close the strips along the top and bottom edges that skipped the spinners.
+    walls: [
+      { x: 150, y: 30, w: 660, h: 40 },
+      { x: 150, y: 530, w: 660, h: 40 },
+    ],
+  },
+  {
+    name: 'Fences',
+    // Stationary laser fences, each with a gap guarded by a hinge laser rotating from the fence's tip.
+    lasers: [
+      { x: 250, y: 215, a: P2, arms: 2, len: 185, color: RED },
+      { x: 250, y: 400, spin: 1.5, arms: 1, len: 160, color: GOLD },
+      { x: 480, y: 385, a: P2, arms: 2, len: 185, color: RED },
+      { x: 480, y: 200, a: Math.PI, spin: -1.7, arms: 1, len: 160, color: GOLD },
+      { x: 710, y: 215, a: P2, arms: 2, len: 185, color: RED },
+      { x: 710, y: 400, spin: 2.0, arms: 1, len: 160, color: GOLD },
+    ],
+  },
+  {
+    name: 'Pendulums',
+    lasers: [
+      { x: 260, y: 30, a: P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 0, arms: 1, len: 330, color: PURPLE },
+      { x: 380, y: 570, a: -P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 1.2, arms: 1, len: 330, color: PURPLE },
+      { x: 500, y: 30, a: P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 2.4, arms: 1, len: 330, color: PURPLE },
+      { x: 620, y: 570, a: -P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 3.6, arms: 1, len: 330, color: PURPLE },
+      { x: 740, y: 30, a: P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 4.8, arms: 1, len: 330, color: PURPLE },
+    ],
+    // A pillar opposite each pendulum, so you have to pass under every one of them.
+    walls: [
+      { x: 245, y: 350, w: 30, h: 220 },
+      { x: 365, y: 30, w: 30, h: 220 },
+      { x: 485, y: 350, w: 30, h: 220 },
+      { x: 605, y: 30, w: 30, h: 220 },
+      { x: 725, y: 350, w: 30, h: 220 },
+    ],
+  },
+  {
+    name: 'Crossfire',
+    lasers: [
+      { x: 480, y: 300, spin: 0.7, arms: 4, len: 250, color: RED },
+      { x: 300, y: 30, a: P2, sweep: 0.6, sweepSpeed: 1.5, arms: 1, len: 290, color: PURPLE },
+      { x: 660, y: 570, a: -P2, sweep: 0.6, sweepSpeed: 1.5, sweepPhase: Math.PI, arms: 1, len: 290, color: PURPLE },
+    ],
+  },
+  {
+    name: 'Conveyor',
+    lasers: [
+      { x: 300, y: 130, a: P2, arms: 2, len: 100, mx: 140, period: 2.6, color: RED },
+      { x: 300, y: 470, a: P2, arms: 2, len: 100, mx: 140, period: 2.6, phase: 0.5, color: RED },
+      { x: 540, y: 300, a: P2, arms: 2, len: 110, mx: 140, period: 2.2, phase: 0.25, color: ORANGE },
+      { x: 740, y: 130, a: P2, arms: 2, len: 100, mx: 100, period: 3, phase: 0.7, color: RED },
+      { x: 740, y: 470, a: P2, arms: 2, len: 100, mx: 100, period: 3, phase: 0.2, color: RED },
+    ],
+  },
+  {
+    name: 'Blink',
+    lasers: [
+      { x: 250, y: 300, a: P2, arms: 2, len: 270, blink: [1.4, 1.1, 0.0], color: CYAN },
+      { x: 400, y: 300, a: P2, arms: 2, len: 270, blink: [1.4, 1.1, 0.25], color: CYAN },
+      { x: 550, y: 300, a: P2, arms: 2, len: 270, blink: [1.4, 1.1, 0.5], color: CYAN },
+      { x: 700, y: 300, a: P2, arms: 2, len: 270, blink: [1.4, 1.1, 0.75], color: CYAN },
+      { x: 475, y: 300, my: 200, period: 4, spin: 2.2, arms: 4, len: 55, color: ORANGE },
+    ],
+  },
+  {
+    name: 'Turnstiles',
+    // Doorways in solid walls, each swept by a hinge laser mounted on the door frame.
+    lasers: [
+      { x: 305, y: 220, a: -P2, spin: 2.0, arms: 1, len: 100, color: GOLD },
+      { x: 485, y: 380, a: P2, spin: -2.2, arms: 1, len: 100, color: GOLD },
+      { x: 665, y: 220, a: -P2, spin: 2.6, arms: 1, len: 100, color: GOLD },
+      { x: 370, y: 300, arms: 2, len: 50, color: RED },
+      { x: 600, y: 300, arms: 2, len: 50, color: RED },
+      { x: 840, y: 240, a: P2, arms: 2, len: 210, color: RED },
+      { x: 840, y: 450, a: P2, spin: -1.5, arms: 1, len: 110, color: GOLD },
+    ],
+    walls: [
+      { x: 290, y: 30, w: 30, h: 90 },
+      { x: 290, y: 220, w: 30, h: 350 },
+      { x: 470, y: 30, w: 30, h: 350 },
+      { x: 470, y: 480, w: 30, h: 90 },
+      { x: 650, y: 30, w: 30, h: 90 },
+      { x: 650, y: 220, w: 30, h: 350 },
+    ],
+  },
+  {
+    name: 'Rotor',
+    lasers: [
+      { x: 480, y: 300, spin: 0.9, arms: 2, len: 280, color: RED },
+      { x: 480, y: 110, spin: -2.5, arms: 2, len: 80, color: ORANGE },
+      { x: 480, y: 490, spin: -2.5, arms: 2, len: 80, color: ORANGE },
+    ],
+  },
+  {
+    name: 'Clockwork',
+    lasers: [
+      { x: 260, y: 180, spin: 1.5, arms: 4, len: 70, color: ORANGE },
+      { x: 480, y: 180, spin: -1.5, arms: 4, len: 70, color: ORANGE },
+      { x: 700, y: 180, spin: 1.5, arms: 4, len: 70, color: ORANGE },
+      { x: 260, y: 420, spin: -1.5, arms: 4, len: 70, color: ORANGE },
+      { x: 480, y: 420, spin: 1.5, arms: 4, len: 70, color: ORANGE },
+      { x: 700, y: 420, spin: -1.5, arms: 4, len: 70, color: ORANGE },
+      { x: 370, y: 300, spin: 2.5, arms: 2, len: 80, color: RED },
+      { x: 590, y: 300, spin: -2.5, arms: 2, len: 80, color: RED },
+    ],
+    walls: [
+      { x: 150, y: 30, w: 660, h: 70 },
+      { x: 150, y: 500, w: 660, h: 70 },
+    ],
+  },
+  {
+    name: 'Zipper',
+    lasers: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
+      x: 200 + i * 80, y: 300, my: 210, period: 3, phase: i * 0.125, a: P2, arms: 2, len: 60, color: GREEN,
+    })),
+  },
+  {
+    name: 'Gauntlet',
+    lasers: [
+      { x: 320, y: 300, my: 180, period: 5, spin: 2, arms: 2, len: 105, color: RED },
+      { x: 640, y: 300, my: 180, period: 5, phase: 0.5, spin: -2, arms: 2, len: 105, color: RED },
+      { x: 480, y: 300, mx: 60, period: 3, spin: -1.1, arms: 4, len: 130, color: ORANGE },
+      { x: 480, y: 30, a: P2, sweep: 1.1, sweepSpeed: 1.2, arms: 1, len: 240, color: PURPLE },
+      { x: 480, y: 570, a: -P2, sweep: 1.1, sweepSpeed: 1.2, sweepPhase: 1.6, arms: 1, len: 240, color: PURPLE },
+      { x: 760, y: 150, spin: 1.6, arms: 3, len: 80, color: CYAN },
+      { x: 760, y: 450, spin: -1.6, arms: 3, len: 80, color: CYAN },
+    ],
+  },
+  {
+    name: 'Strobe',
+    lasers: [
+      { x: 250, y: 300, a: P2, arms: 2, len: 270, blink: [1.1, 1.0, 0], color: CYAN },
+      { x: 480, y: 300, a: P2, arms: 2, len: 270, blink: [1.1, 1.0, 0.33], color: CYAN },
+      { x: 710, y: 300, a: P2, arms: 2, len: 270, blink: [1.1, 1.0, 0.66], color: CYAN },
+      { x: 365, y: 300, spin: 1.8, arms: 2, len: 105, color: RED },
+      { x: 595, y: 300, spin: -1.8, arms: 2, len: 105, color: RED },
+    ],
+    // Squeeze everyone into the middle corridor so the spinners can't be walked around.
+    walls: [
+      { x: 150, y: 30, w: 660, h: 140 },
+      { x: 150, y: 430, w: 660, h: 140 },
+    ],
+  },
+  {
+    name: 'Orbit',
+    lasers: [
+      ...[0, 0.25, 0.5, 0.75].map((ph) => ({
+        x: 480, y: 300, mx: 170, my: 170, orbit: true, period: 6, phase: ph, spin: 3, arms: 2, len: 60, color: GREEN,
+      })),
+      { x: 480, y: 300, spin: -1, arms: 3, len: 100, color: RED },
+    ],
+    walls: [
+      { x: 150, y: 30, w: 660, h: 60 },
+      { x: 150, y: 510, w: 660, h: 60 },
+      { x: 150, y: 90, w: 140, h: 90 },
+      { x: 670, y: 90, w: 140, h: 90 },
+      { x: 150, y: 420, w: 140, h: 90 },
+      { x: 670, y: 420, w: 140, h: 90 },
+    ],
+  },
+  {
+    name: 'Lighthouse',
+    lasers: [
+      { x: 380, y: 300, spin: 1.1, arms: 1, len: 250, color: GOLD },
+      { x: 620, y: 300, spin: -1.4, a: Math.PI, arms: 1, len: 250, color: GOLD },
+      { x: 500, y: 80, spin: 2, arms: 3, len: 80, color: ORANGE },
+      { x: 500, y: 520, spin: -2, arms: 3, len: 80, color: ORANGE },
+    ],
+  },
+  {
+    name: 'Sweeper Storm',
+    lasers: [
+      { x: 350, y: 30, a: P2, sweep: 0.8, sweepSpeed: 1.3, arms: 1, len: 300, color: PURPLE },
+      { x: 650, y: 30, a: P2, sweep: 0.8, sweepSpeed: 1.3, sweepPhase: 2, arms: 1, len: 300, color: PURPLE },
+      { x: 500, y: 570, a: -P2, sweep: 0.8, sweepSpeed: 1.3, sweepPhase: 1, arms: 1, len: 300, color: PURPLE },
+      { x: 480, y: 300, mx: 250, period: 6, spin: 1.2, arms: 4, len: 90, color: ORANGE },
+    ],
+    walls: [
+      { x: 335, y: 340, w: 30, h: 230 },
+      { x: 485, y: 30, w: 30, h: 230 },
+      { x: 635, y: 340, w: 30, h: 230 },
+    ],
+  },
+  {
+    name: 'Final Exam',
+    lasers: [
+      { x: 200, y: 300, a: P2, arms: 2, len: 270, blink: [1.2, 1.0, 0], color: CYAN },
+      { x: 380, y: 300, mx: 120, my: 120, orbit: true, period: 4, spin: 2.2, arms: 4, len: 45, color: GREEN },
+      { x: 560, y: 30, a: P2, sweep: 0.8, sweepSpeed: 1.5, arms: 1, len: 245, color: PURPLE },
+      { x: 560, y: 570, a: -P2, sweep: 0.8, sweepSpeed: 1.5, sweepPhase: Math.PI, arms: 1, len: 245, color: PURPLE },
+      { x: 720, y: 300, my: 120, period: 5, spin: 1.3, arms: 2, len: 140, color: RED },
+      { x: 830, y: 300, a: P2, arms: 2, len: 270, blink: [1.0, 1.2, 0.5], color: CYAN },
+    ],
+  },
+];
+
+const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
+
+function normalizeLaser(L) {
+  const b = Array.isArray(L.blink) ? L.blink : null;
+  return {
+    x: num(L.x, 480), y: num(L.y, 300), len: num(L.len, 100), arms: Math.max(1, Math.round(num(L.arms, 1))),
+    a: num(L.a, 0), spin: num(L.spin, 0),
+    sweep: num(L.sweep, 0), sweepSpeed: num(L.sweepSpeed, 1.5), sweepPhase: num(L.sweepPhase, 0),
+    mx: num(L.mx, 0), my: num(L.my, 0), period: num(L.period, 3), phase: num(L.phase, 0), orbit: !!L.orbit,
+    blink: b ? true : !!L.blink,
+    on: b ? b[0] : num(L.on, 1.2), off: b ? b[1] : num(L.off, 1), blinkPhase: b ? b[2] : num(L.blinkPhase, 0),
+    color: typeof L.color === 'string' ? L.color : RED,
+  };
+}
+
+function normalizeWall(w) {
+  return { x: num(w.x, 420), y: num(w.y, 260), w: Math.max(10, num(w.w, 120)), h: Math.max(10, num(w.h, 40)) };
+}
+
+function normalizeLevel(l, id) {
+  const objs = (arr) => (Array.isArray(arr) ? arr.filter((o) => o && typeof o === 'object') : []);
+  return {
+    id: id || null,
+    name: typeof l.name === 'string' ? l.name : 'Untitled',
+    lasers: objs(l.lasers).map(normalizeLaser),
+    walls: objs(l.walls).map(normalizeWall),
+  };
+}
+
+const isStatic = (L) => !L.spin && !L.sweep && !L.mx && !L.my;
+
+// Fraction (0..1) of the segment from (ax, ay) that travels before hitting a wall.
+function clipToWalls(ax, ay, bx, by, walls) {
+  const dx = bx - ax, dy = by - ay;
+  let end = 1;
+  for (const w of walls) {
+    let t0 = -Infinity, t1 = Infinity;
+    if (Math.abs(dx) < 1e-9) {
+      if (ax < w.x || ax > w.x + w.w) continue;
+    } else {
+      let u = (w.x - ax) / dx, v = (w.x + w.w - ax) / dx;
+      if (u > v) [u, v] = [v, u];
+      t0 = Math.max(t0, u); t1 = Math.min(t1, v);
+    }
+    if (Math.abs(dy) < 1e-9) {
+      if (ay < w.y || ay > w.y + w.h) continue;
+    } else {
+      let u = (w.y - ay) / dy, v = (w.y + w.h - ay) / dy;
+      if (u > v) [u, v] = [v, u];
+      t0 = Math.max(t0, u); t1 = Math.min(t1, v);
+    }
+    // t1 <= 0: the beam starts on the wall's surface and points away from it.
+    if (t1 < t0 || t1 <= 1e-6 || t0 >= end) continue;
+    end = Math.max(0, t0);
+  }
+  return end;
+}
+
+function laserState(L, t, walls) {
+  let px = L.x, py = L.y;
+  if (L.mx || L.my) {
+    const ang = (t / Math.max(0.1, L.period) + L.phase) * TAU;
+    px += L.mx * Math.sin(ang);
+    py += L.my * (L.orbit ? Math.cos(ang) : Math.sin(ang));
+  }
+  let a = L.a + L.spin * t;
+  if (L.sweep) a += L.sweep * Math.sin(t * L.sweepSpeed + L.sweepPhase);
+
+  let active = true, warn = false;
+  if (L.blink) {
+    const on = Math.max(0.05, L.on), cycle = on + Math.max(0.05, L.off);
+    const tt = (((t + L.blinkPhase * cycle) % cycle) + cycle) % cycle;
+    active = tt < on;
+    warn = !active && cycle - tt < 0.5;
+  }
+
+  // Each segment: [ax, ay, bx, by, stoppedByWall]
+  const segs = [];
+  for (let i = 0; i < L.arms; i++) {
+    const ang = a + (i * TAU) / L.arms;
+    const bx = px + Math.cos(ang) * L.len, by = py + Math.sin(ang) * L.len;
+    const f = walls && walls.length ? clipToWalls(px, py, bx, by, walls) : 1;
+    segs.push([px, py, px + (bx - px) * f, py + (by - py) * f, f < 1]);
+  }
+  return { px, py, segs, active, warn };
+}
+
+function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  let u = lenSq ? ((px - ax) * dx + (py - ay) * dy) / lenSq : 0;
+  u = Math.max(0, Math.min(1, u));
+  return Math.hypot(px - (ax + u * dx), py - (ay + u * dy));
+}
+
+function hitsPoint(level, t, x, y, radius) {
+  for (const L of level.lasers) {
+    const s = laserState(L, t, level.walls);
+    if (!s.active) continue;
+    for (const [ax, ay, bx, by] of s.segs) {
+      if (segDist(x, y, ax, ay, bx, by) < radius) return true;
+    }
+  }
+  return false;
+}
+
+function circleInWall(x, y, r, walls) {
+  for (const w of walls) {
+    const cx = Math.max(w.x, Math.min(w.x + w.w, x)), cy = Math.max(w.y, Math.min(w.y + w.h, y));
+    if ((x - cx) ** 2 + (y - cy) ** 2 < r * r) return true;
+  }
+  return false;
+}
+
+// Slide a circle out of any walls it overlaps.
+function pushOutOfWalls(p, r, walls) {
+  for (let pass = 0; pass < 3; pass++) {
+    for (const w of walls) {
+      const cx = Math.max(w.x, Math.min(w.x + w.w, p.x)), cy = Math.max(w.y, Math.min(w.y + w.h, p.y));
+      const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
+      if (d >= r) continue;
+      if (d > 1e-6) {
+        p.x += (dx / d) * (r - d);
+        p.y += (dy / d) * (r - d);
+      } else {
+        const left = p.x - w.x, right = w.x + w.w - p.x, top = p.y - w.y, bottom = w.y + w.h - p.y;
+        const m = Math.min(left, right, top, bottom);
+        if (m === left) p.x = w.x - r;
+        else if (m === right) p.x = w.x + w.w + r;
+        else if (m === top) p.y = w.y - r;
+        else p.y = w.y + w.h + r;
+      }
+    }
+  }
+}
+// @@CORE-END
+
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const BUILTIN = BUILTIN_LEVELS.map((l) => normalizeLevel(l, 'b-' + slug(l.name)));
+
+// ---------- Storage ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+};
+
+const LASER_SPEEDS = [[0.5, 'Chill'], [0.75, 'Easy'], [1, 'Normal'], [1.25, 'Fast'], [1.5, 'Hard'], [2, 'Insane']];
+const PLAYER_SPEEDS = [[0.75, 'Careful'], [1, 'Normal'], [1.25, 'Quick'], [1.5, 'Zoomy']];
+const settings = {
+  laser: store.get('laserroom.laserSpeed', 1),
+  player: store.get('laserroom.playerSpeed', 1),
+};
+let bests = store.get('laserroom.best', {});
+let customLevels = store.get('laserroom.custom', []).map((l) => normalizeLevel(l, l.id));
+const bestKey = (id) => `${id}@L${settings.laser}P${settings.player}`;
+
+// ---------- DOM helpers ----------
+const $ = (s) => document.querySelector(s);
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+}
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  return `${m}:${(s % 60).toFixed(2).padStart(5, '0')}`;
+}
+
+// ---------- Canvas sizing ----------
+const canvas = $('#game');
+const ctx = canvas.getContext('2d');
+const stage = $('#stage');
+
+function resize() {
+  const w = stage.clientWidth - 24, h = stage.clientHeight - 24;
+  const scale = Math.min(w / W, h / (H + HUD));
+  if (!(scale > 0)) return;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = W * scale + 'px';
+  canvas.style.height = (H + HUD) * scale + 'px';
+  canvas.width = Math.round(W * scale * dpr);
+  canvas.height = Math.round((H + HUD) * scale * dpr);
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+}
+new ResizeObserver(resize).observe(stage);
+
+function toLogical(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * (H + HUD) - HUD };
+}
+
+// ---------- Views / tabs ----------
+let view = 'play';
+function switchView(v) {
+  view = v;
+  keys.clear();
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
+  $('#levelsView').hidden = v !== 'levels';
+  $('#speedView').hidden = v !== 'speed';
+  $('#editorPanel').hidden = v !== 'editor';
+  $('#main').classList.toggle('editing', v === 'editor');
+  if (v === 'levels') renderLevels();
+  if (v === 'speed') renderSpeed();
+  if (v === 'editor') refreshEditorPanel();
+  requestAnimationFrame(resize);
+}
+document.querySelectorAll('.tab').forEach((b) =>
+  b.addEventListener('click', () => { b.blur(); switchView(b.dataset.view); }));
+$('#speedChip').addEventListener('click', (e) => { e.currentTarget.blur(); switchView('speed'); });
+
+function updateSpeedChip() {
+  $('#speedChip').textContent = `⚡ Lasers ${settings.laser}x · Player ${settings.player}x`;
+}
+
+// ---------- Speed tab ----------
+function renderSpeed() {
+  const build = (container, options, key) => {
+    container.innerHTML = '';
+    for (const [val, label] of options) {
+      const b = el('button');
+      b.classList.toggle('active', settings[key] === val);
+      b.append(el('b', null, val + 'x'), el('span', null, label));
+      b.addEventListener('click', () => {
+        settings[key] = val;
+        store.set(key === 'laser' ? 'laserroom.laserSpeed' : 'laserroom.playerSpeed', val);
+        updateSpeedChip();
+        renderSpeed();
+      });
+      container.append(b);
+    }
+  };
+  build($('#laserSeg'), LASER_SPEEDS, 'laser');
+  build($('#playerSeg'), PLAYER_SPEEDS, 'player');
+}
+
+// ---------- Levels tab ----------
+function bestLabel(id) {
+  const best = bests[bestKey(id)];
+  return el('span', 'best' + (best ? ' done' : ''), best ? `✓ Best ${fmtTime(best)}` : 'Not cleared at this speed');
+}
+
+function renderLevels() {
+  const camp = $('#campaignCards');
+  camp.innerHTML = '';
+  BUILTIN.forEach((lvl, i) => {
+    const card = el('button', 'card');
+    card.append(el('span', 'num', `Level ${i + 1}`), el('span', 'name', lvl.name), bestLabel(lvl.id));
+    const copy = el('span', 'mini edit-copy', 'Edit copy');
+    copy.addEventListener('click', (e) => {
+      e.stopPropagation();
+      loadIntoEditor({ ...structuredClone(lvl), id: null, name: lvl.name + ' copy' });
+      switchView('editor');
+    });
+    card.append(copy);
+    card.addEventListener('click', () => startSession('campaign', BUILTIN, i));
+    camp.append(card);
+  });
+
+  const cust = $('#customCards');
+  cust.innerHTML = '';
+  for (const lvl of customLevels) {
+    const card = el('div', 'card');
+    const info = `${lvl.lasers.length} lasers` + (lvl.walls.length ? ` · ${lvl.walls.length} walls` : '');
+    card.append(el('span', 'num', info), el('span', 'name', lvl.name || 'Untitled'), bestLabel(lvl.id));
+    const actions = el('div', 'actions');
+    const play = el('button', 'mini', '▶ Play');
+    play.addEventListener('click', () => startSession('single', [lvl], 0));
+    const edit = el('button', 'mini', 'Edit');
+    edit.addEventListener('click', () => { loadIntoEditor(structuredClone(lvl)); switchView('editor'); });
+    const del = el('button', 'mini danger', 'Delete');
+    del.addEventListener('click', () => {
+      if (!confirm(`Delete "${lvl.name || 'Untitled'}"?`)) return;
+      customLevels = customLevels.filter((c) => c.id !== lvl.id);
+      store.set('laserroom.custom', customLevels);
+      if (editor.level.id === lvl.id) editor.level.id = null;
+      renderLevels();
+    });
+    actions.append(play, edit, del);
+    card.append(actions);
+    cust.append(card);
+  }
+  const add = el('button', 'card new', '+ Make a new level');
+  add.addEventListener('click', () => { newEditorLevel(); switchView('editor'); });
+  cust.append(add);
+}
+
+// ---------- Input ----------
+const keys = new Set();
+const KEYMAP = {
+  KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down',
+  KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
+};
+window.addEventListener('keydown', (e) => {
+  if (e.target.closest && e.target.closest('input, textarea, select, dialog')) return;
+  if (view === 'play') {
+    // Leave browser shortcuts like ⌘W / Ctrl+W alone. macOS also skips keyup for keys
+    // pressed while ⌘ is held, so drop held keys to avoid the player drifting.
+    if (e.metaKey || e.ctrlKey || e.altKey) { keys.clear(); return; }
+    if (KEYMAP[e.code]) {
+      keys.add(KEYMAP[e.code]);
+      e.preventDefault();
+      if (game.mode === 'title') startSession('campaign', BUILTIN, 0);
+    }
+    if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); onConfirm(); }
+    if (e.code === 'KeyR' && game.mode === 'playing') resetPlayer(true);
+    if (e.code === 'Escape' && game.session && game.session.kind === 'test') switchView('editor');
+  } else if (view === 'editor') {
+    editorKey(e);
+  }
+});
+window.addEventListener('keyup', (e) => { if (KEYMAP[e.code]) keys.delete(KEYMAP[e.code]); });
+window.addEventListener('blur', () => keys.clear());
+
+// ---------- Game ----------
+const game = {
+  mode: 'title', // title | playing | cleared | done
+  session: null, // { kind: 'campaign' | 'single' | 'test', levels }
+  index: 0,
+  t: 0, levelTime: 0, totalTime: 0, deaths: 0,
+  player: { x: START_X, y: START_Y, alive: true },
+  respawnTimer: 0, modeTimer: 0, shake: 0, flash: 0, newBest: false,
+  particles: [], trail: [],
+};
+const currentLevel = () => (game.session ? game.session.levels[game.index] : BUILTIN[0]);
+
+function startSession(kind, levels, index) {
+  game.session = { kind, levels };
+  game.index = index;
+  game.deaths = 0;
+  game.totalTime = 0;
+  loadLevel();
+  switchView('play');
+}
+
+function loadLevel() {
+  game.mode = 'playing';
+  game.t = 0;
+  game.levelTime = 0;
+  game.modeTimer = 0;
+  resetPlayer(false);
+}
+
+function resetPlayer(resetClock) {
+  if (resetClock) { game.t = 0; game.levelTime = 0; }
+  Object.assign(game.player, { x: START_X, y: START_Y, alive: true });
+  game.trail = [];
+}
+
+function onConfirm() {
+  if (game.mode === 'title') startSession('campaign', BUILTIN, 0);
+  else if (game.mode === 'done') {
+    if (game.session.kind === 'campaign') { game.mode = 'title'; game.session = null; }
+    else startSession(game.session.kind, game.session.levels, 0);
+  }
+}
+
+function killPlayer() {
+  const p = game.player;
+  p.alive = false;
+  game.deaths++;
+  game.respawnTimer = 0.8;
+  game.shake = 12;
+  game.flash = 1;
+  for (let i = 0; i < 36; i++) {
+    const ang = Math.random() * TAU, sp = 60 + Math.random() * 260;
+    game.particles.push({
+      x: p.x, y: p.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+      life: 0.5 + Math.random() * 0.5, color: Math.random() < 0.5 ? '#6cf6ff' : '#ffffff',
+    });
+  }
+}
+
+function updateGame(dt) {
+  game.shake = Math.max(0, game.shake - dt * 40);
+  game.flash = Math.max(0, game.flash - dt * 2.5);
+  for (const pt of game.particles) {
+    pt.x += pt.vx * dt; pt.y += pt.vy * dt;
+    pt.vx *= 0.94; pt.vy *= 0.94;
+    pt.life -= dt;
+  }
+  game.particles = game.particles.filter((pt) => pt.life > 0);
+
+  game.t += dt * settings.laser;
+  if (game.mode !== 'playing' && game.mode !== 'cleared') return;
+
+  if (game.mode === 'cleared') {
+    game.modeTimer += dt;
+    if (game.modeTimer > 1.6) {
+      if (game.index + 1 < game.session.levels.length) { game.index++; loadLevel(); }
+      else game.mode = 'done';
+    }
+    return;
+  }
+
+  game.levelTime += dt;
+  game.totalTime += dt;
+  game.modeTimer += dt;
+  const p = game.player;
+  const lvl = currentLevel();
+
+  if (!p.alive) {
+    game.respawnTimer -= dt;
+    if (game.respawnTimer <= 0) resetPlayer(false);
+    return;
+  }
+
+  let dx = 0, dy = 0;
+  if (keys.has('left')) dx -= 1;
+  if (keys.has('right')) dx += 1;
+  if (keys.has('up')) dy -= 1;
+  if (keys.has('down')) dy += 1;
+  if (dx || dy) {
+    const m = Math.hypot(dx, dy), sp = PLAYER_SPEED * settings.player;
+    p.x += (dx / m) * sp * dt;
+    p.y += (dy / m) * sp * dt;
+  }
+  pushOutOfWalls(p, PLAYER_R, lvl.walls);
+  p.x = Math.max(ROOM.x0 + PLAYER_R, Math.min(ROOM.x1 - PLAYER_R, p.x));
+  p.y = Math.max(ROOM.y0 + PLAYER_R, Math.min(ROOM.y1 - PLAYER_R, p.y));
+
+  game.trail.push({ x: p.x, y: p.y });
+  if (game.trail.length > 12) game.trail.shift();
+
+  if (hitsPoint(lvl, game.t, p.x, p.y, PLAYER_R + BEAM_HALF - 1)) { killPlayer(); return; }
+
+  if (p.x > EXIT_X) {
+    game.mode = 'cleared';
+    game.modeTimer = 0;
+    const key = bestKey(lvl.id);
+    game.newBest = !bests[key] || game.levelTime < bests[key];
+    if (game.newBest && lvl.id) {
+      bests[key] = game.levelTime;
+      store.set('laserroom.best', bests);
+    }
+  }
+}
+
+// ---------- Drawing ----------
+function drawRoom(t, warnStart) {
+  ctx.fillStyle = '#10111c';
+  ctx.fillRect(ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0);
+  ctx.strokeStyle = 'rgba(255,255,255,0.035)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = ROOM.x0; x <= ROOM.x1; x += 40) { ctx.moveTo(x, ROOM.y0); ctx.lineTo(x, ROOM.y1); }
+  for (let y = ROOM.y0; y <= ROOM.y1; y += 40) { ctx.moveTo(ROOM.x0, y); ctx.lineTo(ROOM.x1, y); }
+  ctx.stroke();
+
+  const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+  ctx.fillStyle = warnStart ? `rgba(255, 51, 85, ${0.1 + pulse * 0.12})` : 'rgba(80, 255, 170, 0.07)';
+  ctx.fillRect(ROOM.x0, ROOM.y0, 80, ROOM.y1 - ROOM.y0);
+  ctx.fillStyle = warnStart ? 'rgba(255, 120, 140, 0.8)' : 'rgba(80, 255, 170, 0.35)';
+  ctx.font = '600 11px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.save();
+  ctx.translate(ROOM.x0 + 14, H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('START', 0, 0);
+  ctx.restore();
+
+  const g = ctx.createLinearGradient(EXIT_X - 20, 0, ROOM.x1, 0);
+  g.addColorStop(0, 'rgba(255, 215, 90, 0)');
+  g.addColorStop(1, `rgba(255, 215, 90, ${0.15 + pulse * 0.12})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(EXIT_X - 20, ROOM.y0, ROOM.x1 - EXIT_X + 20, ROOM.y1 - ROOM.y0);
+  ctx.setLineDash([8, 8]);
+  ctx.strokeStyle = `rgba(255, 215, 90, ${0.35 + pulse * 0.3})`;
+  ctx.beginPath(); ctx.moveTo(EXIT_X, ROOM.y0); ctx.lineTo(EXIT_X, ROOM.y1); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = `rgba(255, 215, 90, ${0.6 + pulse * 0.3})`;
+  ctx.save();
+  ctx.translate(ROOM.x1 - 14, H / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillText('EXIT', 0, 0);
+  ctx.restore();
+
+  ctx.fillStyle = '#1d1f33';
+  ctx.fillRect(0, 0, W, WALL);
+  ctx.fillRect(0, H - WALL, W, WALL);
+  ctx.fillRect(0, 0, WALL, H);
+  ctx.fillRect(W - WALL, 0, WALL, H);
+  ctx.fillStyle = `rgba(255, 215, 90, ${0.5 + pulse * 0.4})`;
+  ctx.fillRect(W - WALL, H / 2 - 60, 6, 120);
+  ctx.strokeStyle = '#2c2f4a';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0);
+}
+
+function drawWalls(walls) {
+  for (const w of walls) {
+    ctx.fillStyle = '#23263e';
+    ctx.fillRect(w.x, w.y, w.w, w.h);
+    ctx.fillStyle = '#2c3050';
+    ctx.fillRect(w.x + 4, w.y + 4, Math.max(0, w.w - 8), Math.max(0, w.h - 8));
+    ctx.strokeStyle = '#454a75';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(w.x + 0.75, w.y + 0.75, w.w - 1.5, w.h - 1.5);
+  }
+}
+
+function strokeSegs(segs) {
+  ctx.beginPath();
+  for (const [ax, ay, bx, by] of segs) { ctx.moveTo(ax, ay); ctx.lineTo(bx, by); }
+  ctx.stroke();
+}
+
+function drawLasers(level, t) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0);
+  ctx.clip();
+  ctx.lineCap = 'round';
+
+  for (const L of level.lasers) {
+    const s = laserState(L, t, level.walls);
+    const color = L.color;
+    if (s.active) {
+      const flicker = 0.85 + Math.random() * 0.15;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.45 * flicker;
+      ctx.lineWidth = BEAM_HALF * 2 + 6;
+      strokeSegs(s.segs);
+      ctx.globalAlpha = flicker;
+      ctx.lineWidth = BEAM_HALF * 2;
+      strokeSegs(s.segs);
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#fff';
+      ctx.globalAlpha = 0.9;
+      ctx.lineWidth = 2;
+      strokeSegs(s.segs);
+      ctx.globalAlpha = 1;
+      // Sparks where a beam hits a wall.
+      for (const seg of s.segs) {
+        if (!seg[4]) continue;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(seg[2], seg[3], 2.5 + Math.random() * 2, 0, TAU); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    } else {
+      // Telegraph: faint dashed line that flickers brighter right before it fires.
+      const bright = s.warn && Math.floor(t * 16) % 2 === 0;
+      ctx.setLineDash([6, 8]);
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = bright ? 0.7 : 0.18;
+      ctx.lineWidth = bright ? 3 : 1.5;
+      strokeSegs(s.segs);
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+
+    // Stationary lasers get a post at each free end; moving ones get a single pivot emitter.
+    if (isStatic(L)) {
+      for (const seg of s.segs) {
+        if (seg[4]) continue;
+        ctx.fillStyle = '#2a2d45';
+        ctx.fillRect(seg[2] - 6, seg[3] - 6, 12, 12);
+        ctx.fillStyle = s.active ? color : '#555a7a';
+        ctx.fillRect(seg[2] - 3, seg[3] - 3, 6, 6);
+      }
+    }
+    if (L.arms === 1) {
+      // Hinge: a bolted ring at the rotating end.
+      ctx.fillStyle = '#2a2d45';
+      ctx.beginPath(); ctx.arc(s.px, s.py, 11, 0, TAU); ctx.fill();
+      ctx.strokeStyle = s.active ? color : '#555a7a';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(s.px, s.py, 7, 0, TAU); ctx.stroke();
+      ctx.fillStyle = '#e8e9ff';
+      ctx.beginPath(); ctx.arc(s.px, s.py, 2, 0, TAU); ctx.fill();
+    } else if (isStatic(L) && L.arms === 2) {
+      // Middle of a static fence doesn't need an emitter.
+    } else {
+      ctx.fillStyle = '#2a2d45';
+      ctx.beginPath(); ctx.arc(s.px, s.py, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = s.active ? color : '#555a7a';
+      ctx.beginPath(); ctx.arc(s.px, s.py, 4.5, 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawPlayerAt(x, y, trail) {
+  if (trail) {
+    trail.forEach((tp, i) => {
+      ctx.fillStyle = `rgba(108, 246, 255, ${(i / trail.length) * 0.25})`;
+      ctx.beginPath(); ctx.arc(tp.x, tp.y, PLAYER_R * (i / trail.length), 0, TAU); ctx.fill();
+    });
+  }
+  ctx.shadowColor = '#6cf6ff';
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = '#6cf6ff';
+  ctx.beginPath(); ctx.arc(x, y, PLAYER_R, 0, TAU); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#e9feff';
+  ctx.beginPath(); ctx.arc(x, y, PLAYER_R * 0.45, 0, TAU); ctx.fill();
+}
+
+// right: array of { text, color, mono }
+function drawHUDBar(title, subtitle, right) {
+  ctx.fillStyle = '#0b0c16';
+  ctx.fillRect(0, 0, W, HUD);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.font = '700 20px system-ui, sans-serif';
+  ctx.fillStyle = '#e8e9ff';
+  ctx.fillText(title, 24, HUD / 2);
+  const tw = ctx.measureText(title).width;
+  ctx.font = '500 18px system-ui, sans-serif';
+  ctx.fillStyle = '#8b8fb8';
+  ctx.fillText(subtitle, 24 + tw + 14, HUD / 2);
+
+  ctx.textAlign = 'right';
+  let x = W - 24;
+  for (let i = right.length - 1; i >= 0; i--) {
+    const item = right[i];
+    ctx.font = item.mono ? '600 18px ui-monospace, Menlo, monospace' : '600 17px system-ui, sans-serif';
+    ctx.fillStyle = item.color || '#e8e9ff';
+    ctx.fillText(item.text, x, HUD / 2);
+    x -= ctx.measureText(item.text).width + 26;
+  }
+  ctx.textBaseline = 'alphabetic';
+}
+
+function drawCenterText(title, sub, sub2) {
+  ctx.fillStyle = 'rgba(7, 7, 13, 0.72)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = '#ff3355';
+  ctx.shadowBlur = 24;
+  ctx.font = '800 56px system-ui, sans-serif';
+  ctx.fillText(title, W / 2, H / 2 - 30);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#b8bbe0';
+  ctx.font = '500 20px system-ui, sans-serif';
+  if (sub) ctx.fillText(sub, W / 2, H / 2 + 20);
+  if (sub2) {
+    ctx.fillStyle = `rgba(108, 246, 255, ${0.55 + 0.45 * Math.sin(performance.now() / 250)})`;
+    ctx.font = '600 18px system-ui, sans-serif';
+    ctx.fillText(sub2, W / 2, H / 2 + 64);
+  }
+}
+
+function renderGame() {
+  const lvl = currentLevel();
+  const kind = game.session ? game.session.kind : 'campaign';
+  ctx.fillStyle = '#07070d';
+  ctx.fillRect(0, 0, W, H + HUD);
+  const title = kind === 'campaign' ? `Level ${game.index + 1}/${BUILTIN.length}` : kind === 'test' ? 'Testing' : 'Custom';
+  drawHUDBar(title, lvl.name || 'Untitled', [
+    { text: `⚡${settings.laser}x`, color: '#ffd75a' },
+    { text: `Deaths ${game.deaths}`, color: '#ff6b85' },
+    { text: fmtTime(game.totalTime), mono: true },
+  ]);
+
+  ctx.save();
+  ctx.translate(0, HUD);
+  if (game.shake > 0) ctx.translate((Math.random() - 0.5) * game.shake, (Math.random() - 0.5) * game.shake);
+  drawRoom(game.t, false);
+  drawWalls(lvl.walls);
+  drawLasers(lvl, game.t);
+  if (game.player.alive && game.mode !== 'title') drawPlayerAt(game.player.x, game.player.y, game.trail);
+  for (const pt of game.particles) {
+    ctx.globalAlpha = Math.max(0, pt.life);
+    ctx.fillStyle = pt.color;
+    ctx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
+  }
+  ctx.globalAlpha = 1;
+  if (game.flash > 0) {
+    ctx.fillStyle = `rgba(255, 40, 70, ${game.flash * 0.25})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  if (game.mode === 'playing' && game.modeTimer < 2) {
+    ctx.globalAlpha = Math.min(1, 2 - game.modeTimer);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 12;
+    ctx.font = '800 40px system-ui, sans-serif';
+    ctx.fillText(lvl.name || 'Untitled', W / 2, 110);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  if (game.mode === 'title') {
+    drawCenterText('LASER ROOM', 'Reach the exit on the far side. Don\'t touch the lasers.',
+      'Press WASD / Arrows to start · or pick a level in the Levels tab');
+  } else if (game.mode === 'cleared') {
+    drawCenterText('CLEARED!', `${lvl.name || 'Untitled'} in ${fmtTime(game.levelTime)}${game.newBest ? '  ·  New best!' : ''}`);
+  } else if (game.mode === 'done') {
+    if (kind === 'campaign') {
+      drawCenterText('YOU ESCAPED', `Time ${fmtTime(game.totalTime)}  ·  Deaths ${game.deaths}`, 'Press Space to continue');
+    } else if (kind === 'test') {
+      drawCenterText('BEATABLE!', `Cleared in ${fmtTime(game.levelTime)}  ·  Deaths ${game.deaths}`, 'Space to retry · Esc to go back to the editor');
+    } else {
+      drawCenterText('LEVEL COMPLETE', `Time ${fmtTime(game.levelTime)}  ·  Deaths ${game.deaths}`, 'Space to replay · Levels tab to pick another');
+    }
+  } else {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText(kind === 'test' ? 'R to restart · Esc back to editor' : 'R to restart level', ROOM.x1 - 8, H - 10);
+  }
+  ctx.restore();
+}
+
+// ---------- Editor ----------
+const COLORS = [RED, ORANGE, GOLD, GREEN, CYAN, PURPLE, '#ff5ad8', '#ffffff'];
+const PRESETS = {
+  static: { arms: 2, len: 100, a: 0, color: RED },
+  hinge: { arms: 1, len: 150, spin: 1.4, color: GOLD },
+  spinner: { arms: 2, len: 120, spin: 1.2, color: RED },
+  cross: { arms: 4, len: 90, spin: -0.9, color: ORANGE },
+  slider: { arms: 2, len: 110, a: P2, my: 150, period: 3, color: RED },
+  sweeper: { y: 30, arms: 1, len: 260, a: P2, sweep: 0.7, sweepSpeed: 1.5, color: PURPLE },
+  blinker: { arms: 2, len: 270, a: P2, blink: [1.2, 1, 0], color: CYAN },
+  orbiter: { mx: 140, my: 140, orbit: true, period: 5, arms: 3, len: 50, spin: 2.5, color: GREEN },
+};
+const LASER_GROUPS = [
+  ['Position', [
+    { k: 'x', label: 'X', min: 30, max: 930, step: 5 },
+    { k: 'y', label: 'Y', min: 30, max: 570, step: 5 },
+  ]],
+  ['Beam', [
+    { k: 'len', label: 'Length', min: 10, max: 600, step: 5 },
+    { k: 'arms', label: 'Beams', min: 1, max: 8, step: 1 },
+    {
+      k: 'fromEnd', label: 'From end', type: 'check', rebuild: true,
+      get: (L) => L.arms === 1, set: (L, v) => { L.arms = v ? 1 : Math.max(2, L.arms); },
+    },
+    { k: 'a', label: 'Angle °', min: -180, max: 180, step: 5, deg: true },
+  ]],
+  ['Spin', [
+    { k: 'spin', label: 'Spin °/s', min: -360, max: 360, step: 5, deg: true },
+  ]],
+  ['Swing', [
+    { k: 'sweep', label: 'Swing °', min: 0, max: 180, step: 5, deg: true },
+    { k: 'sweepSpeed', label: 'Speed', min: 0, max: 6, step: 0.1 },
+    { k: 'sweepPhase', label: 'Offset °', min: 0, max: 360, step: 5, deg: true },
+  ]],
+  ['Move', [
+    { k: 'mx', label: 'Range X', min: -450, max: 450, step: 5 },
+    { k: 'my', label: 'Range Y', min: -300, max: 300, step: 5 },
+    { k: 'period', label: 'Cycle (s)', min: 0.5, max: 12, step: 0.1 },
+    { k: 'phase', label: 'Offset', min: 0, max: 1, step: 0.05 },
+    { k: 'orbit', label: 'Circular', type: 'check' },
+  ]],
+  ['Blink', [
+    { k: 'blink', label: 'Enabled', type: 'check' },
+    { k: 'on', label: 'On (s)', min: 0.2, max: 5, step: 0.1, needs: 'blink' },
+    { k: 'off', label: 'Off (s)', min: 0.2, max: 5, step: 0.1, needs: 'blink' },
+    { k: 'blinkPhase', label: 'Offset', min: 0, max: 1, step: 0.05, needs: 'blink' },
+  ]],
+];
+const WALL_GROUPS = [
+  ['Position', [
+    { k: 'x', label: 'X', min: 0, max: 930, step: 5 },
+    { k: 'y', label: 'Y', min: 0, max: 570, step: 5 },
+  ]],
+  ['Size', [
+    { k: 'w', label: 'Width', min: 10, max: 900, step: 5 },
+    { k: 'h', label: 'Height', min: 10, max: 540, step: 5 },
+  ]],
+];
+
+const editor = {
+  level: normalizeLevel(store.get('laserroom.draft', null) || { name: 'My Level' }),
+  sel: null, // { kind: 'laser' | 'wall', i }
+  t: 0, animate: true, snap: true, drag: null, warnStart: false,
+};
+{
+  const draft = store.get('laserroom.draft', null);
+  if (draft && draft.id) editor.level.id = draft.id;
+}
+let propInputs = {};
+
+const selectedObj = () => (editor.sel ? editor.level[editor.sel.kind + 's'][editor.sel.i] : null);
+function saveDraft() { store.set('laserroom.draft', editor.level); }
+
+// Warn about spawn-point lasers, walls on the spawn, or walls sealing off the exit.
+let warnTimer;
+function scheduleWarnCheck() {
+  clearTimeout(warnTimer);
+  warnTimer = setTimeout(() => {
+    const lvl = editor.level, problems = [];
+    let laserHit = false;
+    for (let t = 0; t < 30 && !laserHit; t += 0.04) laserHit = hitsPoint(lvl, t, START_X, START_Y, PLAYER_R + BEAM_HALF + 2);
+    if (laserHit) problems.push("A laser can hit the player's spawn point.");
+    if (circleInWall(START_X, START_Y, PLAYER_R + 2, lvl.walls)) problems.push("A wall is covering the player's spawn point.");
+    else if (!exitReachable(lvl.walls)) problems.push('Walls block every path to the exit.');
+    editor.warnStart = laserHit || problems.length > 0;
+    $('#edWarn').hidden = problems.length === 0;
+    $('#edWarn').textContent = '⚠ ' + problems.join(' ');
+  }, 120);
+}
+
+function exitReachable(walls) {
+  const C = 8, xs = [], ys = [];
+  for (let x = ROOM.x0 + PLAYER_R; x <= ROOM.x1 - PLAYER_R; x += C) xs.push(x);
+  for (let y = ROOM.y0 + PLAYER_R; y <= ROOM.y1 - PLAYER_R; y += C) ys.push(y);
+  const seen = new Uint8Array(xs.length * ys.length);
+  const si = Math.round((START_X - xs[0]) / C), sj = Math.round((START_Y - ys[0]) / C);
+  const queue = [[si, sj]];
+  seen[sj * xs.length + si] = 1;
+  while (queue.length) {
+    const [i, j] = queue.pop();
+    if (xs[i] > EXIT_X) return true;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const ni = i + di, nj = j + dj;
+      if (ni < 0 || nj < 0 || ni >= xs.length || nj >= ys.length) continue;
+      const k = nj * xs.length + ni;
+      if (seen[k] || circleInWall(xs[ni], ys[nj], PLAYER_R, walls)) continue;
+      seen[k] = 1;
+      queue.push([ni, nj]);
+    }
+  }
+  return false;
+}
+
+function loadIntoEditor(level) {
+  editor.level = normalizeLevel(level, level.id);
+  editor.sel = null;
+  editor.t = 0;
+  saveDraft();
+  refreshEditorPanel();
+}
+
+function newEditorLevel() {
+  loadIntoEditor({ name: 'My Level' });
+}
+
+function editorChanged() {
+  saveDraft();
+  scheduleWarnCheck();
+}
+
+function round(v, step) {
+  const d = step < 1 ? String(step).split('.')[1].length : 0;
+  return Number(v.toFixed(d));
+}
+
+function refreshEditorPanel() {
+  $('#levelName').value = editor.level.name;
+  $('#edAnimate').checked = editor.animate;
+  $('#edSnap').checked = editor.snap;
+  scheduleWarnCheck();
+
+  const props = $('#props');
+  props.innerHTML = '';
+  propInputs = {};
+  const obj = selectedObj();
+  if (!obj) {
+    const empty = !editor.level.lasers.length && !editor.level.walls.length;
+    props.append(el('div', 'placeholder', empty ? 'Add a laser or wall above to get started.' : 'Click a laser or wall on the map to edit it.'));
+    return;
+  }
+
+  const isWall = editor.sel.kind === 'wall';
+  const list = editor.level[editor.sel.kind + 's'];
+  const head = el('div', 'ep-section');
+  const top = el('div', 'sel-head');
+  top.append(el('strong', null, `${isWall ? 'Wall' : 'Laser'} ${editor.sel.i + 1} of ${list.length}`));
+  const dup = el('button', 'mini', 'Duplicate');
+  dup.addEventListener('click', duplicateSelected);
+  const del = el('button', 'mini danger', 'Delete');
+  del.addEventListener('click', deleteSelected);
+  top.append(dup, del);
+  head.append(top);
+
+  if (!isWall) {
+    const sw = el('div', 'swatches');
+    sw.style.marginTop = '10px';
+    for (const c of COLORS) {
+      const b = el('button', 'swatch' + (obj.color === c ? ' active' : ''));
+      b.style.background = c;
+      b.style.color = c;
+      b.title = c;
+      b.addEventListener('click', () => { obj.color = c; editorChanged(); refreshEditorPanel(); });
+      sw.append(b);
+    }
+    head.append(sw);
+  }
+
+  for (const [group, fields] of isWall ? WALL_GROUPS : LASER_GROUPS) {
+    head.append(el('h4', 'group', group));
+    for (const f of fields) head.append(buildField(obj, f));
+  }
+  props.append(head);
+  syncDimRows(obj);
+}
+
+function buildField(obj, f) {
+  if (f.type === 'check') {
+    const row = el('div', 'row check');
+    row.append(el('label', null, f.label));
+    const lab = el('label', 'toggle');
+    const cb = el('input');
+    cb.type = 'checkbox';
+    cb.checked = f.get ? f.get(obj) : !!obj[f.k];
+    cb.addEventListener('change', () => {
+      if (f.set) f.set(obj, cb.checked); else obj[f.k] = cb.checked;
+      editorChanged();
+      if (f.rebuild) refreshEditorPanel(); else syncDimRows(obj);
+    });
+    lab.append(cb);
+    row.append(lab);
+    return row;
+  }
+  const row = el('div', 'row');
+  if (f.needs) row.dataset.needs = f.needs;
+  const id = 'prop-' + f.k;
+  const label = el('label', null, f.label);
+  label.htmlFor = id;
+  const range = el('input');
+  range.type = 'range';
+  range.id = id;
+  range.min = f.min; range.max = f.max; range.step = f.step;
+  const numIn = el('input');
+  numIn.type = 'number';
+  numIn.step = f.step;
+  const toUI = (v) => round(f.deg ? (v * 180) / Math.PI : v, f.step);
+  const apply = (raw) => {
+    let v = parseFloat(raw);
+    if (!isFinite(v)) return;
+    if (f.k === 'arms') v = Math.max(1, Math.min(12, Math.round(v)));
+    if (f.k === 'w' || f.k === 'h') v = Math.max(10, v);
+    obj[f.k] = f.deg ? (v * Math.PI) / 180 : v;
+    editorChanged();
+  };
+  range.addEventListener('input', () => { numIn.value = range.value; apply(range.value); });
+  numIn.addEventListener('change', () => { range.value = numIn.value; apply(numIn.value); });
+  // Beam count and "From end" depend on each other, so rebuild after a change.
+  if (f.k === 'arms') range.addEventListener('change', refreshEditorPanel);
+  if (f.k === 'arms') numIn.addEventListener('change', refreshEditorPanel);
+  const sync = () => { range.value = toUI(obj[f.k]); numIn.value = toUI(obj[f.k]); };
+  sync();
+  propInputs[f.k] = sync;
+  row.append(label, range, numIn);
+  return row;
+}
+
+function syncDimRows(obj) {
+  document.querySelectorAll('#props .row[data-needs]').forEach((r) => r.classList.toggle('dim', !obj[r.dataset.needs]));
+}
+
+function syncPositionInputs() {
+  for (const k of ['x', 'y', 'w', 'h']) propInputs[k] && propInputs[k]();
+}
+
+function addPreset(name) {
+  if (name === 'wall') {
+    const n = editor.level.walls.length;
+    editor.level.walls.push(normalizeWall({ x: 420 + ((n % 5) - 2) * 30, y: 280 + ((n % 5) - 2) * 30, w: 120, h: 40 }));
+    editor.sel = { kind: 'wall', i: editor.level.walls.length - 1 };
+  } else {
+    const n = editor.level.lasers.length;
+    const base = { x: 480 + ((n % 5) - 2) * 30, y: 300, ...PRESETS[name] };
+    if (name === 'sweeper') base.x = 480 + ((n % 5) - 2) * 60;
+    editor.level.lasers.push(normalizeLaser(base));
+    editor.sel = { kind: 'laser', i: editor.level.lasers.length - 1 };
+  }
+  editorChanged();
+  refreshEditorPanel();
+}
+
+function duplicateSelected() {
+  const obj = selectedObj();
+  if (!obj) return;
+  const list = editor.level[editor.sel.kind + 's'];
+  list.push({ ...obj, x: obj.x + 30, y: obj.y + 30 });
+  editor.sel = { kind: editor.sel.kind, i: list.length - 1 };
+  editorChanged();
+  refreshEditorPanel();
+}
+
+function deleteSelected() {
+  if (!editor.sel) return;
+  editor.level[editor.sel.kind + 's'].splice(editor.sel.i, 1);
+  editor.sel = null;
+  editorChanged();
+  refreshEditorPanel();
+}
+
+function editorKey(e) {
+  const obj = selectedObj();
+  if ((e.metaKey || e.ctrlKey) && e.code === 'KeyD') { e.preventDefault(); duplicateSelected(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.code === 'Escape') { editor.sel = null; refreshEditorPanel(); return; }
+  if (!obj) return;
+  if (e.code === 'Delete' || e.code === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+  const step = e.shiftKey ? 10 : 1;
+  const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+  if (moves[e.code]) {
+    e.preventDefault();
+    obj.x += moves[e.code][0];
+    obj.y += moves[e.code][1];
+    clampObj(obj);
+    syncPositionInputs();
+    editorChanged();
+  }
+}
+
+function clampObj(obj) {
+  if (editor.sel.kind === 'wall') {
+    obj.x = Math.max(ROOM.x0 - obj.w + 10, Math.min(ROOM.x1 - 10, obj.x));
+    obj.y = Math.max(ROOM.y0 - obj.h + 10, Math.min(ROOM.y1 - 10, obj.y));
+  } else {
+    obj.x = Math.max(ROOM.x0, Math.min(ROOM.x1, obj.x));
+    obj.y = Math.max(ROOM.y0, Math.min(ROOM.y1, obj.y));
+  }
+}
+
+const HANDLE = 10;
+function editorHitTest(x, y) {
+  const { lasers, walls } = editor.level;
+  const cur = selectedObj();
+  if (cur && editor.sel.kind === 'wall' && Math.abs(x - (cur.x + cur.w)) < HANDLE && Math.abs(y - (cur.y + cur.h)) < HANDLE) {
+    return { kind: 'wall', i: editor.sel.i, resize: true };
+  }
+  for (let i = lasers.length - 1; i >= 0; i--) {
+    const s = laserState(lasers[i], editor.t, walls);
+    if (Math.hypot(s.px - x, s.py - y) < 16) return { kind: 'laser', i };
+  }
+  for (let i = lasers.length - 1; i >= 0; i--) {
+    const s = laserState(lasers[i], editor.t, walls);
+    for (const [ax, ay, bx, by] of s.segs) if (segDist(x, y, ax, ay, bx, by) < 8) return { kind: 'laser', i };
+  }
+  for (let i = walls.length - 1; i >= 0; i--) {
+    const w = walls[i];
+    if (x >= w.x && x <= w.x + w.w && y >= w.y && y <= w.y + w.h) return { kind: 'wall', i };
+  }
+  return null;
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (view !== 'editor') return;
+  const { x, y } = toLogical(e);
+  const hit = editorHitTest(x, y);
+  const changed = !hit || !editor.sel || hit.kind !== editor.sel.kind || hit.i !== editor.sel.i;
+  editor.sel = hit ? { kind: hit.kind, i: hit.i } : null;
+  if (changed) refreshEditorPanel();
+  if (!hit) return;
+  const obj = selectedObj();
+  if (hit.resize) {
+    editor.drag = { resize: true };
+  } else if (hit.kind === 'wall') {
+    editor.drag = { grabDX: x - obj.x, grabDY: y - obj.y };
+  } else {
+    const s = laserState(obj, editor.t, editor.level.walls);
+    editor.drag = { grabDX: x - s.px, grabDY: y - s.py };
+  }
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (view !== 'editor') { canvas.style.cursor = 'default'; return; }
+  const { x, y } = toLogical(e);
+  const obj = selectedObj();
+  const snap = (v) => (editor.snap ? Math.round(v / 10) * 10 : Math.round(v));
+  if (editor.drag && obj) {
+    if (editor.drag.resize) {
+      obj.w = Math.max(10, snap(x) - obj.x);
+      obj.h = Math.max(10, snap(y) - obj.y);
+    } else if (editor.sel.kind === 'wall') {
+      obj.x = snap(x - editor.drag.grabDX);
+      obj.y = snap(y - editor.drag.grabDY);
+    } else {
+      // Keep the grabbed point under the cursor even if the pivot is currently offset along its path.
+      const s = laserState(obj, editor.t, editor.level.walls);
+      obj.x = snap(x - editor.drag.grabDX - (s.px - obj.x));
+      obj.y = snap(y - editor.drag.grabDY - (s.py - obj.y));
+    }
+    clampObj(obj);
+    syncPositionInputs();
+    scheduleWarnCheck();
+    canvas.style.cursor = editor.drag.resize ? 'nwse-resize' : 'grabbing';
+  } else {
+    const hit = editorHitTest(x, y);
+    canvas.style.cursor = !hit ? 'default' : hit.resize ? 'nwse-resize' : 'grab';
+  }
+});
+const endDrag = () => { if (editor.drag) { editor.drag = null; editorChanged(); } };
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => addPreset(b.dataset.preset)));
+$('#levelName').addEventListener('input', (e) => { editor.level.name = e.target.value; saveDraft(); });
+$('#edAnimate').addEventListener('change', (e) => { editor.animate = e.target.checked; });
+$('#edSnap').addEventListener('change', (e) => { editor.snap = e.target.checked; });
+$('#edTime').addEventListener('input', (e) => {
+  editor.t = parseFloat(e.target.value);
+  editor.animate = false;
+  $('#edAnimate').checked = false;
+});
+$('#edTimeReset').addEventListener('click', () => { editor.t = 0; });
+$('#edNew').addEventListener('click', () => {
+  const lvl = editor.level;
+  if ((lvl.lasers.length || lvl.walls.length) && !confirm('Start a new level? Unsaved changes to this one will be lost.')) return;
+  newEditorLevel();
+});
+$('#edClear').addEventListener('click', () => {
+  const lvl = editor.level;
+  if (!(lvl.lasers.length || lvl.walls.length) || !confirm('Remove all lasers and walls from this level?')) return;
+  lvl.lasers = [];
+  lvl.walls = [];
+  editor.sel = null;
+  editorChanged();
+  refreshEditorPanel();
+});
+$('#edSave').addEventListener('click', () => {
+  const lvl = editor.level;
+  if (!lvl.id || !customLevels.some((c) => c.id === lvl.id)) lvl.id = 'c' + Date.now().toString(36);
+  const copy = structuredClone(lvl);
+  const i = customLevels.findIndex((c) => c.id === lvl.id);
+  if (i >= 0) customLevels[i] = copy; else customLevels.push(copy);
+  store.set('laserroom.custom', customLevels);
+  saveDraft();
+  toast(`Saved "${lvl.name || 'Untitled'}" to Your levels`);
+});
+$('#edTest').addEventListener('click', () => {
+  const lvl = structuredClone(editor.level);
+  if (!lvl.lasers.length) { toast('Add some lasers first'); return; }
+  lvl.id = null; // test runs don't record best times
+  startSession('test', [lvl], 0);
+});
+
+const jsonDialog = $('#jsonDialog');
+function roundJSON(level) {
+  return JSON.stringify({ name: level.name, lasers: level.lasers, walls: level.walls },
+    (k, v) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v), 1);
+}
+$('#edExport').addEventListener('click', () => {
+  $('#jsonTitle').textContent = 'Export level';
+  $('#jsonHint').textContent = 'Copy this code to share your level. Someone can paste it into Import.';
+  $('#jsonText').value = roundJSON(editor.level);
+  $('#jsonCopy').hidden = false;
+  $('#jsonLoad').hidden = true;
+  jsonDialog.showModal();
+  $('#jsonText').select();
+});
+$('#edImport').addEventListener('click', () => {
+  $('#jsonTitle').textContent = 'Import level';
+  $('#jsonHint').textContent = 'Paste level code from Export. It replaces what is in the editor.';
+  $('#jsonText').value = '';
+  $('#jsonCopy').hidden = true;
+  $('#jsonLoad').hidden = false;
+  jsonDialog.showModal();
+});
+$('#jsonCopy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('#jsonText').value); toast('Copied!'); }
+  catch { $('#jsonText').select(); document.execCommand('copy'); toast('Copied!'); }
+});
+$('#jsonLoad').addEventListener('click', () => {
+  try {
+    const data = JSON.parse($('#jsonText').value);
+    const level = Array.isArray(data) ? { lasers: data } : data;
+    if (!Array.isArray(level.lasers)) throw new Error('no lasers');
+    loadIntoEditor({ ...level, id: null, name: level.name || 'Imported level' });
+    jsonDialog.close();
+    toast('Level imported');
+  } catch {
+    toast("That doesn't look like level code");
+  }
+});
+$('#jsonClose').addEventListener('click', () => jsonDialog.close());
+
+function drawSelection() {
+  const obj = selectedObj();
+  if (!obj) return;
+  ctx.save();
+  if (editor.sel.kind === 'wall') {
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(obj.x - 3, obj.y - 3, obj.w + 6, obj.h + 6);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#6cf6ff';
+    ctx.fillRect(obj.x + obj.w - HANDLE / 2, obj.y + obj.h - HANDLE / 2, HANDLE, HANDLE);
+    ctx.restore();
+    return;
+  }
+  const L = obj;
+  const s = laserState(L, editor.t, editor.level.walls);
+  ctx.setLineDash([5, 6]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 1.5;
+  if (L.mx || L.my) {
+    ctx.beginPath();
+    if (L.orbit) ctx.ellipse(L.x, L.y, Math.abs(L.mx), Math.abs(L.my), 0, 0, TAU);
+    else { ctx.moveTo(L.x - L.mx, L.y - L.my); ctx.lineTo(L.x + L.mx, L.y + L.my); }
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(L.x - 6, L.y); ctx.lineTo(L.x + 6, L.y);
+    ctx.moveTo(L.x, L.y - 6); ctx.lineTo(L.x, L.y + 6);
+    ctx.stroke();
+  }
+  if (L.arms === 1 && (L.spin || L.sweep)) {
+    // Show the area a hinge or swinger can reach.
+    ctx.beginPath();
+    if (L.spin) ctx.arc(s.px, s.py, L.len, 0, TAU);
+    else { ctx.moveTo(s.px, s.py); ctx.arc(s.px, s.py, L.len, L.a - L.sweep, L.a + L.sweep); ctx.closePath(); }
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(s.px, s.py, 15, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+
+function renderEditor(dt) {
+  if (editor.animate) {
+    editor.t += dt * settings.laser;
+    $('#edTime').value = editor.t % 20;
+  }
+  const lvl = editor.level;
+  ctx.fillStyle = '#07070d';
+  ctx.fillRect(0, 0, W, H + HUD);
+  drawHUDBar('Editor', lvl.name || 'Untitled', [
+    { text: `${lvl.lasers.length} lasers · ${lvl.walls.length} walls`, color: '#8b8fb8' },
+    { text: `t ${editor.t.toFixed(1)}s`, mono: true },
+  ]);
+  ctx.save();
+  ctx.translate(0, HUD);
+  drawRoom(editor.t, editor.warnStart);
+  drawWalls(lvl.walls);
+  ctx.globalAlpha = 0.45;
+  drawPlayerAt(START_X, START_Y);
+  ctx.globalAlpha = 1;
+  drawLasers(lvl, editor.t);
+  drawSelection();
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.fillText('Drag to move · Drag a wall\'s corner to resize · Arrows nudge · Delete removes · ⌘/Ctrl+D duplicates', ROOM.x1 - 8, H - 10);
+  ctx.restore();
+}
+
+// ---------- Main loop ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  if (view === 'play') { updateGame(dt); renderGame(); }
+  else if (view === 'editor') renderEditor(dt);
+  requestAnimationFrame(frame);
+}
+
+updateSpeedChip();
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
