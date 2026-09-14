@@ -309,19 +309,20 @@ const BUILTIN_LEVELS = [
   {
     name: 'Pendulums',
     lasers: [
-      { x: 260, y: 30, a: P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 0, arms: 1, len: 330, color: PURPLE },
-      { x: 380, y: 570, a: -P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 1.2, arms: 1, len: 330, color: PURPLE },
-      { x: 500, y: 30, a: P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 2.4, arms: 1, len: 330, color: PURPLE },
-      { x: 620, y: 570, a: -P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 3.6, arms: 1, len: 330, color: PURPLE },
-      { x: 740, y: 30, a: P2, sweep: 0.5, sweepSpeed: 1.6, sweepPhase: 4.8, arms: 1, len: 330, color: PURPLE },
+      { x: 180, y: 30, a: P2, sweep: 0.6, sweepSpeed: 1.6, sweepPhase: 0, arms: 1, len: 240, color: PURPLE },
+      { x: 330, y: 570, a: -P2, sweep: 0.6, sweepSpeed: 1.6, sweepPhase: 1.2, arms: 1, len: 240, color: PURPLE },
+      { x: 480, y: 30, a: P2, sweep: 0.6, sweepSpeed: 1.6, sweepPhase: 2.4, arms: 1, len: 240, color: PURPLE },
+      { x: 630, y: 570, a: -P2, sweep: 0.6, sweepSpeed: 1.6, sweepPhase: 3.6, arms: 1, len: 240, color: PURPLE },
+      { x: 780, y: 30, a: P2, sweep: 0.6, sweepSpeed: 1.6, sweepPhase: 4.8, arms: 1, len: 240, color: PURPLE },
     ],
-    // A pillar opposite each pendulum, so you have to pass under every one of them.
+    // A pillar opposite each pendulum, so you have to pass through every swing. The pendulums
+    // are short enough to leave a safe pocket between each pair of pillars to wait in.
     walls: [
-      { x: 245, y: 350, w: 30, h: 220 },
-      { x: 365, y: 30, w: 30, h: 220 },
-      { x: 485, y: 350, w: 30, h: 220 },
-      { x: 605, y: 30, w: 30, h: 220 },
-      { x: 725, y: 350, w: 30, h: 220 },
+      { x: 165, y: 270, w: 30, h: 300 },
+      { x: 315, y: 30, w: 30, h: 300 },
+      { x: 465, y: 270, w: 30, h: 300 },
+      { x: 615, y: 30, w: 30, h: 300 },
+      { x: 765, y: 270, w: 30, h: 300 },
     ],
   },
   {
