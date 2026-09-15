@@ -60,8 +60,6 @@
   .card:hover { border-color: var(--cyan); }
   .card .num { font-size: 12px; color: var(--muted); font-weight: 600; }
   .card .name { font-size: 16px; font-weight: 700; }
-  .card .best { font-size: 12px; color: var(--muted); margin-top: auto; font-variant-numeric: tabular-nums; }
-  .card .best.done { color: #7dff6b; }
   .card .actions { display: flex; gap: 6px; margin-top: 8px; }
   .card.new { align-items: center; justify-content: center; color: var(--cyan); border-style: dashed; font-weight: 700; }
   .mini { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; font-size: 12px; }
@@ -247,7 +245,6 @@
       <div class="seg" id="laserSeg"></div>
       <h3>Player speed</h3>
       <div class="seg" id="playerSeg"></div>
-      <p class="muted small" style="margin-top:24px">Best times are tracked separately for each speed combination.</p>
     </div>
   </section>
 </main>
@@ -764,9 +761,7 @@ const settings = {
   laser: store.get('laserroom.laserSpeed', 1),
   player: store.get('laserroom.playerSpeed', 1),
 };
-let bests = store.get('laserroom.best', {});
 let customLevels = store.get('laserroom.custom', []).map((l) => normalizeLevel(l, l.id));
-const bestKey = (id) => `${id}@L${settings.laser}P${settings.player}`;
 
 // ---------- DOM helpers ----------
 const $ = (s) => document.querySelector(s);
@@ -857,17 +852,13 @@ function renderSpeed() {
 }
 
 // ---------- Levels tab ----------
-function bestLabel(id) {
-  const best = bests[bestKey(id)];
-  return el('span', 'best' + (best ? ' done' : ''), best ? `✓ Best ${fmtTime(best)}` : 'Not cleared at this speed');
-}
 
 function renderLevels() {
   const camp = $('#campaignCards');
   camp.innerHTML = '';
   BUILTIN.forEach((lvl, i) => {
     const card = el('button', 'card');
-    card.append(el('span', 'num', `Level ${i + 1}`), el('span', 'name', lvl.name), bestLabel(lvl.id));
+    card.append(el('span', 'num', `Level ${i + 1}`), el('span', 'name', lvl.name));
     const copy = el('span', 'mini edit-copy', 'Edit copy');
     copy.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -887,7 +878,7 @@ function renderLevels() {
       + (lvl.checkpoints.length ? ` · ${lvl.checkpoints.length} ⚑` : '')
       + (lvl.portals.length ? ` · ${lvl.portals.length} ◉` : '')
       + (lvl.w !== ROOM_W || lvl.h !== ROOM_H ? ` · ${lvl.w}×${lvl.h}` : '');
-    card.append(el('span', 'num', info), el('span', 'name', lvl.name || 'Untitled'), bestLabel(lvl.id));
+    card.append(el('span', 'num', info), el('span', 'name', lvl.name || 'Untitled'));
     const actions = el('div', 'actions');
     const play = el('button', 'mini', '▶ Play');
     play.addEventListener('click', () => startSession('single', [lvl], 0));
@@ -944,7 +935,7 @@ const game = {
   index: 0,
   t: 0, levelTime: 0, totalTime: 0, deaths: 0,
   player: { x: 70, y: 300, alive: true },
-  respawnTimer: 0, modeTimer: 0, shake: 0, flash: 0, newBest: false,
+  respawnTimer: 0, modeTimer: 0, shake: 0, flash: 0,
   checkpoint: -1, // index of the checkpoint the player respawns at, -1 = start
   checkpointFlash: 0,
   // Where the player last came out of a portal. Portals stay inactive until they step off it.
@@ -1106,12 +1097,6 @@ function updateGame(dt) {
   if (p.x > room.exitX) {
     game.mode = 'cleared';
     game.modeTimer = 0;
-    const key = bestKey(lvl.id);
-    game.newBest = !bests[key] || game.levelTime < bests[key];
-    if (game.newBest && lvl.id) {
-      bests[key] = game.levelTime;
-      store.set('laserroom.best', bests);
-    }
   }
 }
 
@@ -1453,7 +1438,7 @@ function renderGame() {
     drawCenterText('LASER ROOM', 'Reach the exit on the far side. Don\'t touch the lasers.',
       'Press WASD / Arrows to start · or pick a level in the Levels tab');
   } else if (game.mode === 'cleared') {
-    drawCenterText('CLEARED!', `${lvl.name || 'Untitled'} in ${fmtTime(game.levelTime)}${game.newBest ? '  ·  New best!' : ''}`);
+    drawCenterText('CLEARED!', `${lvl.name || 'Untitled'} in ${fmtTime(game.levelTime)}`);
   } else if (game.mode === 'done') {
     if (kind === 'campaign') {
       drawCenterText('YOU ESCAPED', `Time ${fmtTime(game.totalTime)}  ·  Deaths ${game.deaths}`, 'Press Space to continue');
@@ -2035,7 +2020,6 @@ $('#edSave').addEventListener('click', () => {
 $('#edTest').addEventListener('click', () => {
   const lvl = structuredClone(editor.level);
   if (!lvl.lasers.length) { toast('Add some lasers first'); return; }
-  lvl.id = null; // test runs don't record best times
   startSession('test', [lvl], 0);
 });
 
