@@ -191,6 +191,7 @@
         <button class="btn" data-preset="blinker"><i>┊</i>Blinker</button>
         <button class="btn" data-preset="orbiter"><i>◎</i>Orbiter</button>
         <button class="btn" data-preset="wall" title="Solid block the player can't walk through. Blocks lasers too."><i>■</i>Wall</button>
+        <button class="btn" data-preset="checkpoint" title="Players respawn here after touching it"><i>⚑</i>Checkpoint</button>
       </div>
     </div>
 
@@ -267,12 +268,14 @@ const TAU = Math.PI * 2, P2 = Math.PI / 2;
  *   blinkPhase
  *   color
  * Walls: { x, y, w, h } solid rectangles. Players can't enter them and they stop laser beams.
+ * Checkpoints: { x, y } spots no laser ever reaches. Touching one makes it the respawn point.
  */
 const RED = '#ff3355', ORANGE = '#ff8a3d', GOLD = '#ffd75a', GREEN = '#7dff6b', CYAN = '#33e1ff', PURPLE = '#c94dff';
 
 const BUILTIN_LEVELS = [
   {
     name: 'Warm Up',
+    checkpoints: [{ x: 480, y: 110 }],
     lasers: [
       { x: 340, y: 300, my: 150, period: 3.2, a: P2, arms: 2, len: 150, color: RED },
       { x: 620, y: 300, my: 150, period: 3.2, phase: 0.5, a: P2, arms: 2, len: 150, color: RED },
@@ -281,6 +284,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Spin Cycle',
+    checkpoints: [{ x: 480, y: 100 }],
     lasers: [
       { x: 300, y: 180, spin: 1.3, arms: 2, len: 125, color: RED },
       { x: 300, y: 420, spin: -1.3, arms: 2, len: 125, color: RED },
@@ -296,6 +300,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Fences',
+    checkpoints: [{ x: 310, y: 50 }, { x: 550, y: 550 }],
     // Stationary laser fences, each with a gap guarded by a hinge laser rotating from the fence's tip.
     lasers: [
       { x: 250, y: 215, a: P2, arms: 2, len: 185, color: RED },
@@ -308,6 +313,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Pendulums',
+    checkpoints: [{ x: 405, y: 300 }, { x: 705, y: 300 }],
     lasers: [
       { x: 180, y: 30, a: P2, sweep: 0.6, sweepSpeed: 1.6, sweepPhase: 0, arms: 1, len: 240, color: PURPLE },
       { x: 330, y: 570, a: -P2, sweep: 0.6, sweepSpeed: 1.6, sweepPhase: 1.2, arms: 1, len: 240, color: PURPLE },
@@ -327,6 +333,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Crossfire',
+    checkpoints: [{ x: 720, y: 100 }],
     lasers: [
       { x: 480, y: 300, spin: 0.7, arms: 4, len: 250, color: RED },
       { x: 300, y: 30, a: P2, sweep: 0.6, sweepSpeed: 1.5, arms: 1, len: 290, color: PURPLE },
@@ -335,6 +342,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Conveyor',
+    checkpoints: [{ x: 310, y: 300 }, { x: 540, y: 510 }],
     lasers: [
       { x: 300, y: 130, a: P2, arms: 2, len: 100, mx: 140, period: 2.6, color: RED },
       { x: 300, y: 470, a: P2, arms: 2, len: 100, mx: 140, period: 2.6, phase: 0.5, color: RED },
@@ -345,6 +353,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Blink',
+    checkpoints: [{ x: 325, y: 300 }, { x: 625, y: 300 }],
     lasers: [
       { x: 250, y: 300, a: P2, arms: 2, len: 270, blink: [1.4, 1.1, 0.0], color: CYAN },
       { x: 400, y: 300, a: P2, arms: 2, len: 270, blink: [1.4, 1.1, 0.25], color: CYAN },
@@ -355,6 +364,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Turnstiles',
+    checkpoints: [{ x: 395, y: 500 }, { x: 575, y: 100 }, { x: 760, y: 120 }],
     // Doorways in solid walls, each swept by a hinge laser mounted on the door frame.
     lasers: [
       { x: 305, y: 220, a: -P2, spin: 2.0, arms: 1, len: 100, color: GOLD },
@@ -384,6 +394,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Clockwork',
+    checkpoints: [{ x: 370, y: 130 }, { x: 590, y: 470 }],
     lasers: [
       { x: 260, y: 180, spin: 1.5, arms: 4, len: 70, color: ORANGE },
       { x: 480, y: 180, spin: -1.5, arms: 4, len: 70, color: ORANGE },
@@ -401,6 +412,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Zipper',
+    checkpoints: [{ x: 400, y: 300 }, { x: 640, y: 300 }],
     lasers: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
       x: 200 + i * 80, y: 300, my: 210, period: 3, phase: i * 0.125, a: P2, arms: 2, len: 60, color: GREEN,
     })),
@@ -419,6 +431,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Strobe',
+    checkpoints: [{ x: 450, y: 190 }],
     lasers: [
       { x: 250, y: 300, a: P2, arms: 2, len: 270, blink: [1.1, 1.0, 0], color: CYAN },
       { x: 480, y: 300, a: P2, arms: 2, len: 270, blink: [1.1, 1.0, 0.33], color: CYAN },
@@ -460,6 +473,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Sweeper Storm',
+    checkpoints: [{ x: 420, y: 540 }, { x: 570, y: 60 }],
     lasers: [
       { x: 350, y: 30, a: P2, sweep: 0.8, sweepSpeed: 1.3, arms: 1, len: 300, color: PURPLE },
       { x: 650, y: 30, a: P2, sweep: 0.8, sweepSpeed: 1.3, sweepPhase: 2, arms: 1, len: 300, color: PURPLE },
@@ -474,6 +488,7 @@ const BUILTIN_LEVELS = [
   },
   {
     name: 'Final Exam',
+    checkpoints: [{ x: 290, y: 540 }, { x: 630, y: 50 }],
     lasers: [
       { x: 200, y: 300, a: P2, arms: 2, len: 270, blink: [1.2, 1.0, 0], color: CYAN },
       { x: 380, y: 300, mx: 120, my: 120, orbit: true, period: 4, spin: 2.2, arms: 4, len: 45, color: GREEN },
@@ -511,6 +526,7 @@ function normalizeLevel(l, id) {
     name: typeof l.name === 'string' ? l.name : 'Untitled',
     lasers: objs(l.lasers).map(normalizeLaser),
     walls: objs(l.walls).map(normalizeWall),
+    checkpoints: objs(l.checkpoints).map((c) => ({ x: num(c.x, 480), y: num(c.y, 300) })),
   };
 }
 
@@ -756,7 +772,8 @@ function renderLevels() {
   cust.innerHTML = '';
   for (const lvl of customLevels) {
     const card = el('div', 'card');
-    const info = `${lvl.lasers.length} lasers` + (lvl.walls.length ? ` · ${lvl.walls.length} walls` : '');
+    const info = `${lvl.lasers.length} lasers` + (lvl.walls.length ? ` · ${lvl.walls.length} walls` : '')
+      + (lvl.checkpoints.length ? ` · ${lvl.checkpoints.length} ⚑` : '');
     card.append(el('span', 'num', info), el('span', 'name', lvl.name || 'Untitled'), bestLabel(lvl.id));
     const actions = el('div', 'actions');
     const play = el('button', 'mini', '▶ Play');
@@ -815,8 +832,11 @@ const game = {
   t: 0, levelTime: 0, totalTime: 0, deaths: 0,
   player: { x: START_X, y: START_Y, alive: true },
   respawnTimer: 0, modeTimer: 0, shake: 0, flash: 0, newBest: false,
+  checkpoint: -1, // index of the checkpoint the player respawns at, -1 = start
+  checkpointFlash: 0,
   particles: [], trail: [],
 };
+const CHECKPOINT_R = 16;
 const currentLevel = () => (game.session ? game.session.levels[game.index] : BUILTIN[0]);
 
 function startSession(kind, levels, index) {
@@ -833,12 +853,14 @@ function loadLevel() {
   game.t = 0;
   game.levelTime = 0;
   game.modeTimer = 0;
-  resetPlayer(false);
+  resetPlayer(true);
 }
 
+// resetClock = full level restart (also forgets checkpoints); otherwise respawn at the last checkpoint.
 function resetPlayer(resetClock) {
-  if (resetClock) { game.t = 0; game.levelTime = 0; }
-  Object.assign(game.player, { x: START_X, y: START_Y, alive: true });
+  if (resetClock) { game.t = 0; game.levelTime = 0; game.checkpoint = -1; game.checkpointFlash = 0; }
+  const cp = currentLevel().checkpoints[game.checkpoint];
+  Object.assign(game.player, { x: cp ? cp.x : START_X, y: cp ? cp.y : START_Y, alive: true });
   game.trail = [];
 }
 
@@ -919,6 +941,20 @@ function updateGame(dt) {
 
   if (hitsPoint(lvl, game.t, p.x, p.y, PLAYER_R + BEAM_HALF - 1)) { killPlayer(); return; }
 
+  game.checkpointFlash = Math.max(0, game.checkpointFlash - dt);
+  lvl.checkpoints.forEach((cp, i) => {
+    if (i === game.checkpoint || Math.hypot(p.x - cp.x, p.y - cp.y) > CHECKPOINT_R + PLAYER_R) return;
+    game.checkpoint = i;
+    game.checkpointFlash = 1.4;
+    for (let k = 0; k < 24; k++) {
+      const ang = Math.random() * TAU, sp = 40 + Math.random() * 160;
+      game.particles.push({
+        x: cp.x, y: cp.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        life: 0.4 + Math.random() * 0.4, color: Math.random() < 0.5 ? '#7dff6b' : '#ffffff',
+      });
+    }
+  });
+
   if (p.x > EXIT_X) {
     game.mode = 'cleared';
     game.modeTimer = 0;
@@ -980,6 +1016,31 @@ function drawRoom(t, warnStart) {
   ctx.strokeStyle = '#2c2f4a';
   ctx.lineWidth = 2;
   ctx.strokeRect(ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0);
+}
+
+// Checkpoint pads: a ring with a flag. The active one (respawn point) glows green.
+function drawCheckpoints(checkpoints, active, t) {
+  checkpoints.forEach((cp, i) => {
+    const on = i === active;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4 + i);
+    ctx.save();
+    ctx.fillStyle = on ? `rgba(125, 255, 107, ${0.14 + pulse * 0.1})` : 'rgba(125, 255, 107, 0.05)';
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, CHECKPOINT_R, 0, TAU); ctx.fill();
+    ctx.strokeStyle = on ? '#7dff6b' : 'rgba(125, 255, 107, 0.45)';
+    ctx.lineWidth = 2;
+    if (!on) ctx.setLineDash([4, 4]);
+    if (on) { ctx.shadowColor = '#7dff6b'; ctx.shadowBlur = 14; }
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, CHECKPOINT_R, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    // Flag
+    ctx.strokeStyle = on ? '#e8ffe4' : 'rgba(232, 255, 228, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cp.x - 4, cp.y + 8); ctx.lineTo(cp.x - 4, cp.y - 9); ctx.stroke();
+    ctx.fillStyle = on ? '#7dff6b' : 'rgba(125, 255, 107, 0.45)';
+    ctx.beginPath(); ctx.moveTo(cp.x - 3, cp.y - 9); ctx.lineTo(cp.x + 8, cp.y - 5); ctx.lineTo(cp.x - 3, cp.y - 1); ctx.fill();
+    ctx.restore();
+  });
 }
 
 function drawWalls(walls) {
@@ -1158,8 +1219,21 @@ function renderGame() {
   if (game.shake > 0) ctx.translate((Math.random() - 0.5) * game.shake, (Math.random() - 0.5) * game.shake);
   drawRoom(game.t, false);
   drawWalls(lvl.walls);
+  drawCheckpoints(lvl.checkpoints, game.checkpoint, game.t);
   drawLasers(lvl, game.t);
   if (game.player.alive && game.mode !== 'title') drawPlayerAt(game.player.x, game.player.y, game.trail);
+  if (game.checkpointFlash > 0 && game.mode === 'playing') {
+    const cp = lvl.checkpoints[game.checkpoint];
+    ctx.globalAlpha = Math.min(1, game.checkpointFlash);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#7dff6b';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 8;
+    ctx.font = '800 16px system-ui, sans-serif';
+    ctx.fillText('CHECKPOINT!', cp.x, cp.y - 30 - (1.4 - game.checkpointFlash) * 16);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
   for (const pt of game.particles) {
     ctx.globalAlpha = Math.max(0, pt.life);
     ctx.fillStyle = pt.color;
@@ -1263,10 +1337,16 @@ const WALL_GROUPS = [
     { k: 'h', label: 'Height', min: 10, max: 540, step: 5 },
   ]],
 ];
+const CHECKPOINT_GROUPS = [
+  ['Position', [
+    { k: 'x', label: 'X', min: 30, max: 930, step: 5 },
+    { k: 'y', label: 'Y', min: 30, max: 570, step: 5 },
+  ]],
+];
 
 const editor = {
   level: normalizeLevel(store.get('laserroom.draft', null) || { name: 'My Level' }),
-  sel: null, // { kind: 'laser' | 'wall', i }
+  sel: null, // { kind: 'laser' | 'wall' | 'checkpoint', i } — kind + 's' names the list in the level
   t: 0, animate: true, snap: true, drag: null, warnStart: false,
 };
 {
@@ -1287,15 +1367,29 @@ function scheduleWarnCheck() {
     let laserHit = false;
     for (let t = 0; t < 30 && !laserHit; t += 0.04) laserHit = hitsPoint(lvl, t, START_X, START_Y, PLAYER_R + BEAM_HALF + 2);
     if (laserHit) problems.push("A laser can hit the player's spawn point.");
-    if (circleInWall(START_X, START_Y, PLAYER_R + 2, lvl.walls)) problems.push("A wall is covering the player's spawn point.");
-    else if (!exitReachable(lvl.walls)) problems.push('Walls block every path to the exit.');
-    editor.warnStart = laserHit || problems.length > 0;
+    const startBlocked = circleInWall(START_X, START_Y, PLAYER_R + 2, lvl.walls);
+    const reach = startBlocked ? null : floodFromStart(lvl.walls);
+    if (startBlocked) problems.push("A wall is covering the player's spawn point.");
+    else if (!reach.exit) problems.push('Walls block every path to the exit.');
+    let cpBad = false;
+    lvl.checkpoints.forEach((cp, i) => {
+      if (cpBad) return;
+      let hit = false;
+      for (let t = 0; t < 30 && !hit; t += 0.04) hit = hitsPoint(lvl, t, cp.x, cp.y, PLAYER_R + BEAM_HALF + 2);
+      if (hit) problems.push(`A laser can hit checkpoint ${i + 1}, so players could respawn into it.`);
+      else if (circleInWall(cp.x, cp.y, PLAYER_R, lvl.walls)) problems.push(`Checkpoint ${i + 1} is inside a wall.`);
+      else if (reach && !reach.has(cp.x, cp.y)) problems.push(`Walls block the way to checkpoint ${i + 1}.`);
+      else return;
+      cpBad = true;
+    });
+    editor.warnStart = laserHit || startBlocked;
     $('#edWarn').hidden = problems.length === 0;
     $('#edWarn').textContent = '⚠ ' + problems.join(' ');
   }, 120);
 }
 
-function exitReachable(walls) {
+// Flood fill over the room ignoring lasers: which spots can the player walk to from the start?
+function floodFromStart(walls) {
   const C = 8, xs = [], ys = [];
   for (let x = ROOM.x0 + PLAYER_R; x <= ROOM.x1 - PLAYER_R; x += C) xs.push(x);
   for (let y = ROOM.y0 + PLAYER_R; y <= ROOM.y1 - PLAYER_R; y += C) ys.push(y);
@@ -1303,9 +1397,10 @@ function exitReachable(walls) {
   const si = Math.round((START_X - xs[0]) / C), sj = Math.round((START_Y - ys[0]) / C);
   const queue = [[si, sj]];
   seen[sj * xs.length + si] = 1;
+  let exit = false;
   while (queue.length) {
     const [i, j] = queue.pop();
-    if (xs[i] > EXIT_X) return true;
+    if (xs[i] > EXIT_X) exit = true;
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const ni = i + di, nj = j + dj;
       if (ni < 0 || nj < 0 || ni >= xs.length || nj >= ys.length) continue;
@@ -1315,7 +1410,12 @@ function exitReachable(walls) {
       queue.push([ni, nj]);
     }
   }
-  return false;
+  const has = (x, y) => {
+    const i = Math.max(0, Math.min(xs.length - 1, Math.round((x - xs[0]) / C)));
+    const j = Math.max(0, Math.min(ys.length - 1, Math.round((y - ys[0]) / C)));
+    return !!seen[j * xs.length + i];
+  };
+  return { exit, has };
 }
 
 function loadIntoEditor(level) {
@@ -1351,16 +1451,17 @@ function refreshEditorPanel() {
   propInputs = {};
   const obj = selectedObj();
   if (!obj) {
-    const empty = !editor.level.lasers.length && !editor.level.walls.length;
-    props.append(el('div', 'placeholder', empty ? 'Add a laser or wall above to get started.' : 'Click a laser or wall on the map to edit it.'));
+    const empty = !editor.level.lasers.length && !editor.level.walls.length && !editor.level.checkpoints.length;
+    props.append(el('div', 'placeholder', empty ? 'Add a laser or wall above to get started.' : 'Click something on the map to edit it.'));
     return;
   }
 
-  const isWall = editor.sel.kind === 'wall';
-  const list = editor.level[editor.sel.kind + 's'];
+  const kind = editor.sel.kind;
+  const list = editor.level[kind + 's'];
   const head = el('div', 'ep-section');
   const top = el('div', 'sel-head');
-  top.append(el('strong', null, `${isWall ? 'Wall' : 'Laser'} ${editor.sel.i + 1} of ${list.length}`));
+  const title = { laser: 'Laser', wall: 'Wall', checkpoint: 'Checkpoint' }[kind];
+  top.append(el('strong', null, `${title} ${editor.sel.i + 1} of ${list.length}`));
   const dup = el('button', 'mini', 'Duplicate');
   dup.addEventListener('click', duplicateSelected);
   const del = el('button', 'mini danger', 'Delete');
@@ -1368,7 +1469,11 @@ function refreshEditorPanel() {
   top.append(dup, del);
   head.append(top);
 
-  if (!isWall) {
+  if (kind === 'checkpoint') {
+    head.append(el('p', 'muted small', 'Players respawn here after touching it. Put it somewhere no laser can reach.'));
+  }
+
+  if (kind === 'laser') {
     const sw = el('div', 'swatches');
     sw.style.marginTop = '10px';
     for (const c of COLORS) {
@@ -1382,7 +1487,8 @@ function refreshEditorPanel() {
     head.append(sw);
   }
 
-  for (const [group, fields] of isWall ? WALL_GROUPS : LASER_GROUPS) {
+  const groups = { laser: LASER_GROUPS, wall: WALL_GROUPS, checkpoint: CHECKPOINT_GROUPS }[kind];
+  for (const [group, fields] of groups) {
     head.append(el('h4', 'group', group));
     for (const f of fields) head.append(buildField(obj, f));
   }
@@ -1453,6 +1559,10 @@ function addPreset(name) {
     const n = editor.level.walls.length;
     editor.level.walls.push(normalizeWall({ x: 420 + ((n % 5) - 2) * 30, y: 280 + ((n % 5) - 2) * 30, w: 120, h: 40 }));
     editor.sel = { kind: 'wall', i: editor.level.walls.length - 1 };
+  } else if (name === 'checkpoint') {
+    const n = editor.level.checkpoints.length;
+    editor.level.checkpoints.push({ x: 300 + (n % 4) * 120, y: 300 });
+    editor.sel = { kind: 'checkpoint', i: editor.level.checkpoints.length - 1 };
   } else {
     const n = editor.level.lasers.length;
     const base = { x: 480 + ((n % 5) - 2) * 30, y: 300, ...PRESETS[name] };
@@ -1513,10 +1623,13 @@ function clampObj(obj) {
 
 const HANDLE = 10;
 function editorHitTest(x, y) {
-  const { lasers, walls } = editor.level;
+  const { lasers, walls, checkpoints } = editor.level;
   const cur = selectedObj();
   if (cur && editor.sel.kind === 'wall' && Math.abs(x - (cur.x + cur.w)) < HANDLE && Math.abs(y - (cur.y + cur.h)) < HANDLE) {
     return { kind: 'wall', i: editor.sel.i, resize: true };
+  }
+  for (let i = checkpoints.length - 1; i >= 0; i--) {
+    if (Math.hypot(checkpoints[i].x - x, checkpoints[i].y - y) < CHECKPOINT_R + 2) return { kind: 'checkpoint', i };
   }
   for (let i = lasers.length - 1; i >= 0; i--) {
     const s = laserState(lasers[i], editor.t, walls);
@@ -1544,7 +1657,7 @@ canvas.addEventListener('pointerdown', (e) => {
   const obj = selectedObj();
   if (hit.resize) {
     editor.drag = { resize: true };
-  } else if (hit.kind === 'wall') {
+  } else if (hit.kind !== 'laser') {
     editor.drag = { grabDX: x - obj.x, grabDY: y - obj.y };
   } else {
     const s = laserState(obj, editor.t, editor.level.walls);
@@ -1562,7 +1675,7 @@ canvas.addEventListener('pointermove', (e) => {
     if (editor.drag.resize) {
       obj.w = Math.max(10, snap(x) - obj.x);
       obj.h = Math.max(10, snap(y) - obj.y);
-    } else if (editor.sel.kind === 'wall') {
+    } else if (editor.sel.kind !== 'laser') {
       obj.x = snap(x - editor.drag.grabDX);
       obj.y = snap(y - editor.drag.grabDY);
     } else {
@@ -1596,14 +1709,15 @@ $('#edTime').addEventListener('input', (e) => {
 $('#edTimeReset').addEventListener('click', () => { editor.t = 0; });
 $('#edNew').addEventListener('click', () => {
   const lvl = editor.level;
-  if ((lvl.lasers.length || lvl.walls.length) && !confirm('Start a new level? Unsaved changes to this one will be lost.')) return;
+  if ((lvl.lasers.length || lvl.walls.length || lvl.checkpoints.length) && !confirm('Start a new level? Unsaved changes to this one will be lost.')) return;
   newEditorLevel();
 });
 $('#edClear').addEventListener('click', () => {
   const lvl = editor.level;
-  if (!(lvl.lasers.length || lvl.walls.length) || !confirm('Remove all lasers and walls from this level?')) return;
+  if (!(lvl.lasers.length || lvl.walls.length || lvl.checkpoints.length) || !confirm('Remove all lasers, walls and checkpoints from this level?')) return;
   lvl.lasers = [];
   lvl.walls = [];
+  lvl.checkpoints = [];
   editor.sel = null;
   editorChanged();
   refreshEditorPanel();
@@ -1627,7 +1741,7 @@ $('#edTest').addEventListener('click', () => {
 
 const jsonDialog = $('#jsonDialog');
 function roundJSON(level) {
-  return JSON.stringify({ name: level.name, lasers: level.lasers, walls: level.walls },
+  return JSON.stringify({ name: level.name, lasers: level.lasers, walls: level.walls, checkpoints: level.checkpoints },
     (k, v) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v), 1);
 }
 $('#edExport').addEventListener('click', () => {
@@ -1680,6 +1794,14 @@ function drawSelection() {
     ctx.restore();
     return;
   }
+  if (editor.sel.kind === 'checkpoint') {
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.arc(obj.x, obj.y, CHECKPOINT_R + 6, 0, TAU); ctx.stroke();
+    ctx.restore();
+    return;
+  }
   const L = obj;
   const s = laserState(L, editor.t, editor.level.walls);
   ctx.setLineDash([5, 6]);
@@ -1720,13 +1842,14 @@ function renderEditor(dt) {
   ctx.fillStyle = '#07070d';
   ctx.fillRect(0, 0, W, H + HUD);
   drawHUDBar('Editor', lvl.name || 'Untitled', [
-    { text: `${lvl.lasers.length} lasers · ${lvl.walls.length} walls`, color: '#8b8fb8' },
+    { text: `${lvl.lasers.length} lasers · ${lvl.walls.length} walls · ${lvl.checkpoints.length} checkpoints`, color: '#8b8fb8' },
     { text: `t ${editor.t.toFixed(1)}s`, mono: true },
   ]);
   ctx.save();
   ctx.translate(0, HUD);
   drawRoom(editor.t, editor.warnStart);
   drawWalls(lvl.walls);
+  drawCheckpoints(lvl.checkpoints, -1, editor.t);
   ctx.globalAlpha = 0.45;
   drawPlayerAt(START_X, START_Y);
   ctx.globalAlpha = 1;
