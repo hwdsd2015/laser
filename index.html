@@ -1259,14 +1259,17 @@ const game = {
   checkpointFlash: 0,
   // Where the player last came out of a portal. Portals stay inactive until they step off it.
   portalLock: null,
-  cam: { x: 0, y: 0 },
+  cam: { x: 0, y: 0, s: 1 }, // screen = world * s + (x, y)
   particles: [], trail: [],
 };
 
 // Camera offset (screen = world + cam). Rooms that fit are centered; bigger ones follow the focus point.
+// Bigger rooms zoom out (down to MIN_ZOOM) so their size is visible; anything still too big scrolls.
+const MIN_ZOOM = 0.6;
 function followCamera(room, fx, fy) {
-  const axis = (size, view, f) => (size <= view ? (view - size) / 2 : Math.max(view - size, Math.min(0, view / 2 - f)));
-  return { x: axis(room.w, W, fx), y: axis(room.h, H, fy) };
+  const s = Math.max(MIN_ZOOM, Math.min(1, W / room.w, H / room.h));
+  const axis = (size, view, f) => (size * s <= view ? (view - size * s) / 2 : Math.max(view - size * s, Math.min(0, view / 2 - f * s)));
+  return { x: axis(room.w, W, fx), y: axis(room.h, H, fy), s };
 }
 const CHECKPOINT_R = 16;
 const currentLevel = () => (game.session ? game.session.levels[game.index] : BUILTIN[0]);
@@ -1402,6 +1405,7 @@ function updateGame(dt) {
   const target = followCamera(room, p.x, p.y), ease = Math.min(1, dt * 10);
   game.cam.x += (target.x - game.cam.x) * ease;
   game.cam.y += (target.y - game.cam.y) * ease;
+  game.cam.s = target.s;
 
   if (hitsPoint(lvl, game.t, p.x, p.y, PLAYER_R + BEAM_HALF - 1)) { killPlayer(); return; }
 
@@ -1710,6 +1714,7 @@ function renderGame() {
   if (game.shake > 0) ctx.translate((Math.random() - 0.5) * game.shake, (Math.random() - 0.5) * game.shake);
   ctx.save();
   ctx.translate(Math.round(game.cam.x), Math.round(game.cam.y));
+  ctx.scale(game.cam.s, game.cam.s);
   drawRoom(roomOf(lvl), game.t, false);
   drawWalls(lvl.walls);
   drawCheckpoints(lvl.checkpoints, game.checkpoint, game.t);
