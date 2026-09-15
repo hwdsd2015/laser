@@ -238,11 +238,12 @@
       <h3>Random level</h3>
       <div class="random-box">
         <div class="seg compact" id="randDiff"></div>
+        <div class="seg compact" id="randSize"></div>
         <input type="text" id="randSeed" maxlength="12" placeholder="Seed (optional)" aria-label="Seed">
         <button class="btn go" id="randPlay">🎲 Play random level</button>
         <button class="btn" id="randEdit">Open in editor</button>
       </div>
-      <p class="muted small" style="margin-top:8px">Every random level is checked by a solver first: the start is safe, there's no way to skip the lasers, and it can be beaten. Type a seed to replay a level.</p>
+      <p class="muted small" style="margin-top:8px">Every random level is checked by a solver first: the start is safe, there's no way to skip the lasers, and it can be beaten. Type a seed with the same difficulty and size to replay a level.</p>
       <h3>Campaign</h3>
       <div class="cards" id="campaignCards"></div>
       <h3>Your levels</h3>
@@ -867,23 +868,31 @@ function mulberry32(seed) {
   };
 }
 
+// spacing: room width per pillar (smaller = more pillars). extras: extra hazards per 900px of width.
 const RANDOM_DIFFICULTY = {
-  easy: { label: 'Easy', speed: 0.8, pillars: [2, 3], sizes: [[700, 420], [900, 540]], extras: 0 },
-  medium: { label: 'Medium', speed: 1.05, pillars: [3, 4], sizes: [[900, 540], [1100, 600]], extras: 1 },
-  hard: { label: 'Hard', speed: 1.3, pillars: [4, 6], sizes: [[900, 540], [1300, 700], [1600, 900]], extras: 3 },
+  easy: { label: 'Easy', speed: 0.8, spacing: 300, extras: 0 },
+  medium: { label: 'Medium', speed: 1.05, spacing: 230, extras: 1 },
+  hard: { label: 'Hard', speed: 1.3, spacing: 180, extras: 2.5 },
+};
+const RANDOM_SIZES = {
+  small: { label: 'Small', w: 620, h: 380 },
+  medium: { label: 'Medium', w: 900, h: 540 },
+  large: { label: 'Large', w: 1400, h: 800 },
+  huge: { label: 'Huge', w: 2000, h: 1100 },
+  any: { label: 'Surprise' },
 };
 
 // One attempt: a row of pillars across the room, each with guarded gaps (or a portal around it).
-function randomLevelCandidate(rng, difficulty) {
+function randomLevelCandidate(rng, difficulty, w, h) {
   const D = RANDOM_DIFFICULTY[difficulty];
   const rand = (a, b) => a + rng() * (b - a);
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   const sign = () => (rng() < 0.5 ? -1 : 1);
-  const [w, h] = pick(D.sizes);
   const level = { w, h, lasers: [], walls: [], checkpoints: [], portals: [] };
   const room = roomOf(level);
   const left = room.x0 + 180, right = room.exitX - 50;
-  const n = Math.max(1, Math.min(D.pillars[0] + Math.floor(rng() * (D.pillars[1] - D.pillars[0] + 1)), Math.floor((right - left) / 170)));
+  const wanted = Math.round((right - left) / D.spacing + rand(-0.4, 0.4));
+  const n = Math.max(1, Math.min(wanted, Math.floor((right - left) / 170)));
   const zw = (right - left) / n;
   const pillars = [];
 
@@ -940,7 +949,8 @@ function randomLevelCandidate(rng, difficulty) {
   }
 
   // Extra hazards in the open space between pillars.
-  for (let e = 0; e < D.extras; e++) {
+  const extras = Math.round(D.extras * (w / 900) + rand(-0.3, 0.3));
+  for (let e = 0; e < extras; e++) {
     const z = Math.floor(rng() * n);
     const x0 = pillars[z] + 60, x1 = (z + 1 < n ? pillars[z + 1] : right + 40) - 60;
     if (x1 - x0 < 60) continue;
@@ -987,10 +997,13 @@ function addRandomCheckpoints(level, pillars) {
 }
 
 // Generate a level from a seed, retrying until one passes the fairness checks.
-function generateRandomLevel(seed, difficulty) {
+function generateRandomLevel(seed, difficulty, size = 'medium') {
   const rng = mulberry32(seed);
+  // Pick the size once so retries can't drift toward sizes that pass more easily.
+  const sizeKey = size === 'any' ? ['small', 'medium', 'large', 'huge'][Math.floor(rng() * 4)] : size;
+  const { w, h } = RANDOM_SIZES[sizeKey];
   for (let attempt = 0; attempt < 40; attempt++) {
-    const { level, pillars } = randomLevelCandidate(rng, difficulty);
+    const { level, pillars } = randomLevelCandidate(rng, difficulty, w, h);
     const room = roomOf(level);
     if (!pointIsSafe(level, room.startX, room.startY, PLAYER_R + BEAM_HALF + 2)) continue;
     if (level.portals.some((p) => circleInWall(p.ax, p.ay, PLAYER_R, level.walls) || circleInWall(p.bx, p.by, PLAYER_R, level.walls))) continue;
@@ -998,7 +1011,7 @@ function generateRandomLevel(seed, difficulty) {
     // Must be beatable while keeping 6px of extra room from every beam, at 1x speed.
     if (solveLevel(level, 1, PLAYER_R + BEAM_HALF + 5, 60, 12) === null) continue;
     addRandomCheckpoints(level, pillars);
-    level.name = `Random ${RANDOM_DIFFICULTY[difficulty].label} #${seed}`;
+    level.name = `Random ${RANDOM_DIFFICULTY[difficulty].label} ${RANDOM_SIZES[sizeKey].label} #${seed}`;
     return level;
   }
   return null;
@@ -1113,6 +1126,7 @@ function renderSpeed() {
 // ---------- Levels tab ----------
 
 let randomDifficulty = store.get('laserroom.randomDifficulty', 'medium');
+let randomSize = store.get('laserroom.randomSize', 'any');
 
 function seedFrom(text) {
   const t = String(text || '').trim();
@@ -1128,7 +1142,7 @@ function withRandomLevel(seedText, then) {
   toast('Generating a level…');
   setTimeout(() => {
     const seed = seedFrom(seedText);
-    const level = generateRandomLevel(seed, randomDifficulty);
+    const level = generateRandomLevel(seed, randomDifficulty, randomSize);
     if (!level) { toast("Couldn't make a fair level from that seed. Try another."); return; }
     then(level);
   }, 30);
@@ -1139,17 +1153,16 @@ function playRandom(seedText) {
 }
 
 function renderRandomControls() {
-  const box = $('#randDiff');
-  box.innerHTML = '';
-  for (const [key, D] of Object.entries(RANDOM_DIFFICULTY)) {
-    const b = el('button', key === randomDifficulty ? 'active' : '', D.label);
-    b.addEventListener('click', () => {
-      randomDifficulty = key;
-      store.set('laserroom.randomDifficulty', key);
-      renderRandomControls();
-    });
-    box.append(b);
-  }
+  const build = (box, options, current, choose) => {
+    box.innerHTML = '';
+    for (const [key, o] of Object.entries(options)) {
+      const b = el('button', key === current ? 'active' : '', o.label);
+      b.addEventListener('click', () => { choose(key); renderRandomControls(); });
+      box.append(b);
+    }
+  };
+  build($('#randDiff'), RANDOM_DIFFICULTY, randomDifficulty, (k) => { randomDifficulty = k; store.set('laserroom.randomDifficulty', k); });
+  build($('#randSize'), RANDOM_SIZES, randomSize, (k) => { randomSize = k; store.set('laserroom.randomSize', k); });
 }
 $('#randPlay').addEventListener('click', () => playRandom($('#randSeed').value));
 $('#randEdit').addEventListener('click', () => withRandomLevel($('#randSeed').value, (level) => {
