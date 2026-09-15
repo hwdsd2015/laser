@@ -77,6 +77,10 @@
   .seg button:hover { border-color: var(--cyan); }
   .seg button.active { border-color: var(--gold); background: rgba(255, 215, 90, 0.1); box-shadow: 0 0 18px rgba(255, 215, 90, 0.15); }
   .seg button.active b { color: var(--gold); }
+  .seg.compact button { padding: 7px 14px; min-width: 0; font-weight: 700; }
+  .random-box { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .random-box input[type=text] { width: 150px; }
+  .random-box .btn { padding: 9px 14px; }
 
   #editorPanel {
     width: 330px; flex-shrink: 0; overflow-y: auto; background: var(--panel);
@@ -189,6 +193,7 @@
       <div class="btnrow">
         <button class="btn" id="edExport">Export</button>
         <button class="btn" id="edImport">Import</button>
+        <button class="btn" id="edRandom" title="Replace this level with a random one">🎲 Random</button>
         <button class="btn danger" id="edClear">Clear</button>
       </div>
     </div>
@@ -230,6 +235,14 @@
     <div class="page-inner">
       <h2>Levels</h2>
       <p class="muted">Pick a level to play. Campaign levels continue on to the next one when you clear them.</p>
+      <h3>Random level</h3>
+      <div class="random-box">
+        <div class="seg compact" id="randDiff"></div>
+        <input type="text" id="randSeed" maxlength="12" placeholder="Seed (optional)" aria-label="Seed">
+        <button class="btn go" id="randPlay">🎲 Play random level</button>
+        <button class="btn" id="randEdit">Open in editor</button>
+      </div>
+      <p class="muted small" style="margin-top:8px">Every random level is checked by a solver first: the start is safe, there's no way to skip the lasers, and it can be beaten. Type a seed to replay a level.</p>
       <h3>Campaign</h3>
       <div class="cards" id="campaignCards"></div>
       <h3>Your levels</h3>
@@ -744,6 +757,252 @@ function pushOutOfWalls(p, r, walls) {
     }
   }
 }
+// ---------- Level solver ----------
+// Grid over the walkable room. Cells are S px apart; portal ends link to their destination cell.
+function levelGrid(level, S) {
+  const room = roomOf(level), xs = [], ys = [];
+  for (let x = room.x0 + PLAYER_R; x <= room.x1 - PLAYER_R; x += S) xs.push(x);
+  for (let y = room.y0 + PLAYER_R; y <= room.y1 - PLAYER_R; y += S) ys.push(y);
+  const NX = xs.length, NY = ys.length, open = new Uint8Array(NX * NY);
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) open[j * NX + i] = circleInWall(xs[i], ys[j], PLAYER_R, level.walls) ? 0 : 1;
+  const cell = (x, y) => Math.max(0, Math.min(NY - 1, Math.round((y - ys[0]) / S))) * NX
+    + Math.max(0, Math.min(NX - 1, Math.round((x - xs[0]) / S)));
+  const links = [];
+  for (const p of level.portals) {
+    for (const [fx, fy, tx, ty] of [[p.ax, p.ay, p.bx, p.by], [p.bx, p.by, p.ax, p.ay]]) {
+      const from = [];
+      for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) if (Math.hypot(xs[i] - fx, ys[j] - fy) < PORTAL_R) from.push(j * NX + i);
+      links.push({ from, to: cell(tx, ty) });
+    }
+  }
+  return { room, xs, ys, NX, NY, S, open, cell, links };
+}
+
+// Mark every cell within R of an active laser beam at time t.
+function markLasers(level, g, t, R, out) {
+  for (const L of level.lasers) {
+    const s = laserState(L, t, level.walls);
+    if (!s.active) continue;
+    for (const [ax, ay, bx, by] of s.segs) {
+      const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - R - g.xs[0]) / g.S));
+      const i1 = Math.min(g.NX - 1, Math.ceil((Math.max(ax, bx) + R - g.xs[0]) / g.S));
+      const j0 = Math.max(0, Math.floor((Math.min(ay, by) - R - g.ys[0]) / g.S));
+      const j1 = Math.min(g.NY - 1, Math.ceil((Math.max(ay, by) + R - g.ys[0]) / g.S));
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) if (segDist(g.xs[i], g.ys[j], ax, ay, bx, by) < R) out[j * g.NX + i] = 1;
+      }
+    }
+  }
+}
+
+// Time-stepped search for a route from the start to the exit that stays R px from every beam.
+// Returns the time it takes in seconds, or null if there's no route within maxTime.
+function solveLevel(level, laserSpeed, R, maxTime, S = 10) {
+  const g = levelGrid(level, S), N = g.NX * g.NY, dt = S / PLAYER_SPEED;
+  let cur = new Uint8Array(N);
+  cur[g.cell(g.room.startX, g.room.startY)] = 1;
+  for (let step = 1; step * dt < maxTime; step++) {
+    const blocked = new Uint8Array(N);
+    markLasers(level, g, step * dt * laserSpeed, R, blocked);
+    markLasers(level, g, (step - 0.5) * dt * laserSpeed, R, blocked);
+    const next = new Uint8Array(N);
+    let any = false;
+    for (let j = 0; j < g.NY; j++) {
+      for (let i = 0; i < g.NX; i++) {
+        const k = j * g.NX + i;
+        if (!g.open[k] || blocked[k]) continue;
+        if (!(cur[k] || (i > 0 && cur[k - 1]) || (i < g.NX - 1 && cur[k + 1]) || (j > 0 && cur[k - g.NX]) || (j < g.NY - 1 && cur[k + g.NX]))) continue;
+        next[k] = 1;
+        any = true;
+        if (g.xs[i] > g.room.exitX) return step * dt;
+      }
+    }
+    for (const { from, to } of g.links) {
+      if (g.open[to] && !blocked[to] && from.some((k) => cur[k])) { next[to] = 1; any = true; }
+    }
+    if (!any) return null;
+    cur = next;
+  }
+  return null;
+}
+
+// Cells that no laser ever comes within R of (sampled over `span` seconds).
+function neverHitMap(level, g, R, span = 40) {
+  const ever = new Uint8Array(g.NX * g.NY);
+  for (let t = 0; t < span; t += 0.05) markLasers(level, g, t, R, ever);
+  return ever;
+}
+
+// True if the exit can be reached without ever being near a laser (the level can be skipped).
+function hasFreePath(level) {
+  const g = levelGrid(level, 10), ever = neverHitMap(level, g, 15);
+  const seen = new Uint8Array(g.NX * g.NY), stack = [g.cell(g.room.startX, g.room.startY)];
+  while (stack.length) {
+    const k = stack.pop();
+    if (seen[k] || !g.open[k] || ever[k]) continue;
+    seen[k] = 1;
+    const i = k % g.NX, j = (k / g.NX) | 0;
+    if (g.xs[i] > g.room.exitX) return true;
+    if (i > 0) stack.push(k - 1);
+    if (i < g.NX - 1) stack.push(k + 1);
+    if (j > 0) stack.push(k - g.NX);
+    if (j < g.NY - 1) stack.push(k + g.NX);
+    for (const { from, to } of g.links) if (from.includes(k)) stack.push(to);
+  }
+  return false;
+}
+
+function pointIsSafe(level, x, y, R, span = 30) {
+  for (let t = 0; t < span; t += 0.03) if (hitsPoint(level, t, x, y, R)) return false;
+  return true;
+}
+
+// ---------- Random level generator ----------
+function mulberry32(seed) {
+  return function () {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const RANDOM_DIFFICULTY = {
+  easy: { label: 'Easy', speed: 0.8, pillars: [2, 3], sizes: [[700, 420], [900, 540]], extras: 0 },
+  medium: { label: 'Medium', speed: 1.05, pillars: [3, 4], sizes: [[900, 540], [1100, 600]], extras: 1 },
+  hard: { label: 'Hard', speed: 1.3, pillars: [4, 6], sizes: [[900, 540], [1300, 700], [1600, 900]], extras: 3 },
+};
+
+// One attempt: a row of pillars across the room, each with guarded gaps (or a portal around it).
+function randomLevelCandidate(rng, difficulty) {
+  const D = RANDOM_DIFFICULTY[difficulty];
+  const rand = (a, b) => a + rng() * (b - a);
+  const pick = (arr) => arr[Math.floor(rng() * arr.length)];
+  const sign = () => (rng() < 0.5 ? -1 : 1);
+  const [w, h] = pick(D.sizes);
+  const level = { w, h, lasers: [], walls: [], checkpoints: [], portals: [] };
+  const room = roomOf(level);
+  const left = room.x0 + 180, right = room.exitX - 50;
+  const n = Math.max(1, Math.min(D.pillars[0] + Math.floor(rng() * (D.pillars[1] - D.pillars[0] + 1)), Math.floor((right - left) / 170)));
+  const zw = (right - left) / n;
+  const pillars = [];
+
+  for (let i = 0; i < n; i++) {
+    const cx = Math.round(left + zw * (i + 0.5));
+    const sp = D.speed * rand(0.85, 1.15);
+    pillars.push(cx);
+
+    if (i > 0 && rng() < 0.2 && level.portals.length < 2) {
+      // Solid pillar; a portal pair is the only way past it. A spinner guards the far side.
+      level.walls.push({ x: cx - 15, y: room.y0, w: 30, h: room.y1 - room.y0 });
+      const off = Math.min(80, zw / 2 - 30);
+      const ay = Math.round(rand(room.y0 + 60, room.y1 - 60)), by = Math.round(rand(room.y0 + 60, room.y1 - 60));
+      level.portals.push({ ax: cx - off, ay, bx: cx + off, by, color: PORTAL_COLORS[level.portals.length] });
+      const gy = by + (by > (room.y0 + room.y1) / 2 ? -1 : 1) * 95;
+      level.lasers.push({ x: cx + off, y: gy, spin: sign() * rand(1.4, 2) * sp, arms: 2, len: 75, color: ORANGE });
+      continue;
+    }
+
+    // Pillar with one or two gaps, each guarded by a moving laser.
+    const g = rand(55, 85);
+    const gapCount = h >= 520 && rng() < 0.45 ? 2 : 1;
+    const centers = gapCount === 1
+      ? [rand(room.y0 + g + 30, room.y1 - g - 30)]
+      : [rand(room.y0 + g + 30, (room.y0 + room.y1) / 2 - g - 20), rand((room.y0 + room.y1) / 2 + g + 20, room.y1 - g - 30)];
+    let cursor = room.y0;
+    for (const gy of centers) {
+      if (gy - g - cursor > 5) level.walls.push({ x: cx - 15, y: Math.round(cursor), w: 30, h: Math.round(gy - g - cursor) });
+      cursor = gy + g;
+    }
+    if (room.y1 - cursor > 5) level.walls.push({ x: cx - 15, y: Math.round(cursor), w: 30, h: Math.round(room.y1 - cursor) });
+
+    for (const gy of centers) {
+      const y = Math.round(gy);
+      switch (pick(['spinner', 'cross', 'hinge', 'blinker', 'slider'])) {
+        case 'spinner':
+          level.lasers.push({ x: cx, y, spin: sign() * rand(1.2, 1.8) * sp, arms: 2, len: Math.round(g + 25), color: RED });
+          break;
+        case 'cross':
+          level.lasers.push({ x: cx, y, spin: sign() * rand(0.8, 1.2) * sp, arms: 4, len: Math.round(g + 20), color: ORANGE });
+          break;
+        case 'hinge': {
+          const top = rng() < 0.5;
+          level.lasers.push({ x: cx, y: Math.round(top ? gy - g : gy + g), spin: sign() * rand(1.3, 2) * sp, arms: 1, len: Math.round(2 * g + 10), color: GOLD });
+          break;
+        }
+        case 'blinker':
+          level.lasers.push({ x: cx, y, a: P2, arms: 2, len: Math.round(g + 5), blink: [rand(0.9, 1.4) / sp, rand(0.8, 1.2) / sp, rng()], color: CYAN });
+          break;
+        default:
+          level.lasers.push({ x: cx, y, a: P2, arms: 2, len: Math.round(0.45 * g), my: Math.round(0.6 * g), period: rand(2, 3) / sp, phase: rng(), color: GREEN });
+      }
+    }
+  }
+
+  // Extra hazards in the open space between pillars.
+  for (let e = 0; e < D.extras; e++) {
+    const z = Math.floor(rng() * n);
+    const x0 = pillars[z] + 60, x1 = (z + 1 < n ? pillars[z + 1] : right + 40) - 60;
+    if (x1 - x0 < 60) continue;
+    const x = Math.round(rand(x0, x1)), y = Math.round(rand(room.y0 + 90, room.y1 - 90));
+    if (rng() < 0.5) {
+      const r = Math.round(rand(35, 70));
+      level.lasers.push({ x, y, mx: r, my: r, orbit: true, period: rand(3, 5) / D.speed, spin: sign() * 2 * D.speed, arms: 2, len: 30, color: PURPLE });
+    } else {
+      level.lasers.push({ x, y, a: rand(0, Math.PI), arms: 2, len: Math.round(rand(30, 60)), color: PURPLE });
+    }
+  }
+  return { level: normalizeLevel(level), pillars };
+}
+
+// Put a checkpoint in each space between pillars, on a spot no laser ever gets near.
+function addRandomCheckpoints(level, pillars) {
+  const g = levelGrid(level, 10), near = neverHitMap(level, g, 34, 30);
+  const reach = new Uint8Array(g.NX * g.NY), stack = [g.cell(g.room.startX, g.room.startY)];
+  while (stack.length) {
+    const k = stack.pop();
+    if (reach[k] || !g.open[k]) continue;
+    reach[k] = 1;
+    const i = k % g.NX, j = (k / g.NX) | 0;
+    if (i > 0) stack.push(k - 1);
+    if (i < g.NX - 1) stack.push(k + 1);
+    if (j > 0) stack.push(k - g.NX);
+    if (j < g.NY - 1) stack.push(k + g.NX);
+    for (const { from, to } of g.links) if (from.includes(k)) stack.push(to);
+  }
+  for (let z = 0; z + 1 < pillars.length; z++) {
+    const midX = (pillars[z] + pillars[z + 1]) / 2, midY = (g.room.y0 + g.room.y1) / 2;
+    let best = null;
+    for (let j = 0; j < g.NY; j++) {
+      for (let i = 0; i < g.NX; i++) {
+        const k = j * g.NX + i, x = g.xs[i], y = g.ys[j];
+        if (x < pillars[z] + 45 || x > pillars[z + 1] - 45 || !reach[k] || near[k]) continue;
+        if (circleInWall(x, y, PLAYER_R + 10, level.walls) || portalAt(level, x, y)) continue;
+        const d = Math.hypot(x - midX, (y - midY) * 0.5);
+        if (!best || d < best.d) best = { x, y, d };
+      }
+    }
+    if (best) level.checkpoints.push({ x: best.x, y: best.y });
+  }
+}
+
+// Generate a level from a seed, retrying until one passes the fairness checks.
+function generateRandomLevel(seed, difficulty) {
+  const rng = mulberry32(seed);
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const { level, pillars } = randomLevelCandidate(rng, difficulty);
+    const room = roomOf(level);
+    if (!pointIsSafe(level, room.startX, room.startY, PLAYER_R + BEAM_HALF + 2)) continue;
+    if (level.portals.some((p) => circleInWall(p.ax, p.ay, PLAYER_R, level.walls) || circleInWall(p.bx, p.by, PLAYER_R, level.walls))) continue;
+    if (hasFreePath(level)) continue;
+    // Must be beatable while keeping 6px of extra room from every beam, at 1x speed.
+    if (solveLevel(level, 1, PLAYER_R + BEAM_HALF + 5, 60, 12) === null) continue;
+    addRandomCheckpoints(level, pillars);
+    level.name = `Random ${RANDOM_DIFFICULTY[difficulty].label} #${seed}`;
+    return level;
+  }
+  return null;
+}
 // @@CORE-END
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -853,7 +1112,53 @@ function renderSpeed() {
 
 // ---------- Levels tab ----------
 
+let randomDifficulty = store.get('laserroom.randomDifficulty', 'medium');
+
+function seedFrom(text) {
+  const t = String(text || '').trim();
+  if (!t) return 1 + Math.floor(Math.random() * 999999);
+  if (/^\d+$/.test(t)) return Number(t) % 4294967296;
+  let hsh = 2166136261;
+  for (const ch of t) hsh = Math.imul(hsh ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return hsh;
+}
+
+// Generating takes a moment on big rooms, so show a toast first and do the work on the next tick.
+function withRandomLevel(seedText, then) {
+  toast('Generating a level…');
+  setTimeout(() => {
+    const seed = seedFrom(seedText);
+    const level = generateRandomLevel(seed, randomDifficulty);
+    if (!level) { toast("Couldn't make a fair level from that seed. Try another."); return; }
+    then(level);
+  }, 30);
+}
+
+function playRandom(seedText) {
+  withRandomLevel(seedText, (level) => startSession('random', [level], 0));
+}
+
+function renderRandomControls() {
+  const box = $('#randDiff');
+  box.innerHTML = '';
+  for (const [key, D] of Object.entries(RANDOM_DIFFICULTY)) {
+    const b = el('button', key === randomDifficulty ? 'active' : '', D.label);
+    b.addEventListener('click', () => {
+      randomDifficulty = key;
+      store.set('laserroom.randomDifficulty', key);
+      renderRandomControls();
+    });
+    box.append(b);
+  }
+}
+$('#randPlay').addEventListener('click', () => playRandom($('#randSeed').value));
+$('#randEdit').addEventListener('click', () => withRandomLevel($('#randSeed').value, (level) => {
+  loadIntoEditor({ ...level, id: null });
+  switchView('editor');
+}));
+
 function renderLevels() {
+  renderRandomControls();
   const camp = $('#campaignCards');
   camp.innerHTML = '';
   BUILTIN.forEach((lvl, i) => {
@@ -921,6 +1226,7 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); onConfirm(); }
     if (e.code === 'KeyR' && game.mode === 'playing') resetPlayer(true);
     if (e.code === 'Escape' && game.session && game.session.kind === 'test') switchView('editor');
+    if (e.code === 'KeyN' && game.session && game.session.kind === 'random') playRandom('');
   } else if (view === 'editor') {
     editorKey(e);
   }
@@ -1379,7 +1685,7 @@ function renderGame() {
   const kind = game.session ? game.session.kind : 'campaign';
   ctx.fillStyle = '#07070d';
   ctx.fillRect(0, 0, W, H + HUD);
-  const title = kind === 'campaign' ? `Level ${game.index + 1}/${BUILTIN.length}` : kind === 'test' ? 'Testing' : 'Custom';
+  const title = { campaign: `Level ${game.index + 1}/${BUILTIN.length}`, test: 'Testing', random: 'Random' }[kind] || 'Custom';
   drawHUDBar(title, lvl.name || 'Untitled', [
     { text: `⚡${settings.laser}x`, color: '#ffd75a' },
     { text: `Deaths ${game.deaths}`, color: '#ff6b85' },
@@ -1442,6 +1748,8 @@ function renderGame() {
   } else if (game.mode === 'done') {
     if (kind === 'campaign') {
       drawCenterText('YOU ESCAPED', `Time ${fmtTime(game.totalTime)}  ·  Deaths ${game.deaths}`, 'Press Space to continue');
+    } else if (kind === 'random') {
+      drawCenterText('LEVEL COMPLETE', `Time ${fmtTime(game.levelTime)}  ·  Deaths ${game.deaths}`, 'N for a new random level · Space to replay');
     } else if (kind === 'test') {
       drawCenterText('BEATABLE!', `Cleared in ${fmtTime(game.levelTime)}  ·  Deaths ${game.deaths}`, 'Space to retry · Esc to go back to the editor');
     } else {
@@ -1454,7 +1762,8 @@ function renderGame() {
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 4;
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.fillText(kind === 'test' ? 'R to restart · Esc back to editor' : 'R to restart level', W - 38, H - 10);
+    const hint = { test: 'R to restart · Esc back to editor', random: 'R to restart · N for a new random level' }[kind] || 'R to restart level';
+    ctx.fillText(hint, W - 38, H - 10);
     ctx.shadowBlur = 0;
   }
   ctx.restore();
@@ -2016,6 +2325,10 @@ $('#edSave').addEventListener('click', () => {
   store.set('laserroom.custom', customLevels);
   saveDraft();
   toast(`Saved "${lvl.name || 'Untitled'}" to Your levels`);
+});
+$('#edRandom').addEventListener('click', () => {
+  if (levelHasStuff(editor.level) && !confirm('Replace this level with a random one? Unsaved changes will be lost.')) return;
+  withRandomLevel('', (level) => loadIntoEditor({ ...level, id: null }));
 });
 $('#edTest').addEventListener('click', () => {
   const lvl = structuredClone(editor.level);
