@@ -167,6 +167,22 @@
     <div class="ep-section">
       <h4>Level</h4>
       <input type="text" id="levelName" maxlength="40" placeholder="Level name">
+      <div class="row" style="margin-top:10px">
+        <label for="roomW">Room width</label>
+        <input type="range" id="roomW" min="400" max="2400" step="20">
+        <input type="number" id="roomWNum" min="400" max="3000" step="20">
+      </div>
+      <div class="row">
+        <label for="roomH">Room height</label>
+        <input type="range" id="roomH" min="300" max="1500" step="20">
+        <input type="number" id="roomHNum" min="300" max="2000" step="20">
+      </div>
+      <div class="btnrow">
+        <button class="mini" data-room="560,340">Small</button>
+        <button class="mini" data-room="900,540">Normal</button>
+        <button class="mini" data-room="1400,840">Large</button>
+        <button class="mini" data-room="2000,1200">Huge</button>
+      </div>
       <div class="btnrow">
         <button class="btn" id="edNew">New</button>
         <button class="btn primary" id="edSave">Save</button>
@@ -192,6 +208,7 @@
         <button class="btn" data-preset="orbiter"><i>◎</i>Orbiter</button>
         <button class="btn" data-preset="wall" title="Solid block the player can't walk through. Blocks lasers too."><i>■</i>Wall</button>
         <button class="btn" data-preset="checkpoint" title="Players respawn here after touching it"><i>⚑</i>Checkpoint</button>
+        <button class="btn" data-preset="portal" title="A linked pair: step into one end to come out of the other"><i>◉</i>Portal</button>
       </div>
     </div>
 
@@ -249,11 +266,20 @@
 
 <script>
 // @@CORE-BEGIN
+// W x H is the on-screen view in world units. Rooms can be smaller (centered) or larger (camera follows).
 const W = 960, H = 600, HUD = 60, WALL = 30;
-const ROOM = { x0: WALL, y0: WALL, x1: W - WALL, y1: H - WALL };
-const START_X = 70, START_Y = H / 2, EXIT_X = 870;
-const PLAYER_R = 12, PLAYER_SPEED = 230, BEAM_HALF = 4;
+const ROOM_W = 900, ROOM_H = 540; // default room interior size
+const PLAYER_R = 12, PLAYER_SPEED = 230, BEAM_HALF = 4, PORTAL_R = 18;
 const TAU = Math.PI * 2, P2 = Math.PI / 2;
+
+// Room geometry for a level. Interior spans x0..x1, y0..y1; the outer wall adds WALL on each side.
+function roomOf(level) {
+  const w = level.w || ROOM_W, h = level.h || ROOM_H;
+  return {
+    x0: WALL, y0: WALL, x1: WALL + w, y1: WALL + h, w: w + 2 * WALL, h: h + 2 * WALL,
+    startX: WALL + 40, startY: WALL + h / 2, exitX: WALL + w - 60,
+  };
+}
 
 /*
  * Laser fields:
@@ -269,8 +295,11 @@ const TAU = Math.PI * 2, P2 = Math.PI / 2;
  *   color
  * Walls: { x, y, w, h } solid rectangles. Players can't enter them and they stop laser beams.
  * Checkpoints: { x, y } spots no laser ever reaches. Touching one makes it the respawn point.
+ * Portals: { ax, ay, bx, by, color } linked pair. Stepping into one end puts you at the other.
+ * Room size: optional w, h (interior size, default 900 x 540).
  */
 const RED = '#ff3355', ORANGE = '#ff8a3d', GOLD = '#ffd75a', GREEN = '#7dff6b', CYAN = '#33e1ff', PURPLE = '#c94dff';
+const PORTAL_COLORS = ['#b36bff', '#ff9f1c', '#2ee6a6', '#4d8dff'];
 
 const BUILTIN_LEVELS = [
   {
@@ -280,6 +309,15 @@ const BUILTIN_LEVELS = [
       { x: 340, y: 300, my: 150, period: 3.2, a: P2, arms: 2, len: 150, color: RED },
       { x: 620, y: 300, my: 150, period: 3.2, phase: 0.5, a: P2, arms: 2, len: 150, color: RED },
       { x: 480, y: 300, spin: 0.8, arms: 2, len: 90, color: ORANGE },
+    ],
+  },
+  {
+    name: 'Closet',
+    // Small room: nowhere to hide from the spinner.
+    w: 560, h: 340,
+    lasers: [
+      { x: 250, y: 200, spin: 1.5, arms: 2, len: 160, color: RED },
+      { x: 470, y: 200, a: P2, arms: 2, len: 170, blink: [1.1, 1.0, 0], color: CYAN },
     ],
   },
   {
@@ -332,6 +370,23 @@ const BUILTIN_LEVELS = [
     ],
   },
   {
+    name: 'Portal Hop',
+    // Laser fences block the whole room; portals are the only way across.
+    w: 700, h: 400,
+    checkpoints: [{ x: 290, y: 60 }, { x: 560, y: 150 }],
+    lasers: [
+      { x: 250, y: 230, a: P2, arms: 2, len: 200, color: RED },
+      { x: 480, y: 230, a: P2, arms: 2, len: 200, color: RED },
+      { x: 170, y: 330, spin: 1.6, arms: 2, len: 70, color: ORANGE },
+      { x: 365, y: 230, spin: 1.8, arms: 1, len: 110, color: GOLD },
+      { x: 650, y: 230, a: P2, arms: 2, len: 200, blink: [1.0, 1.0, 0.5], color: CYAN },
+    ],
+    portals: [
+      { ax: 170, ay: 380, bx: 330, by: 80, color: PORTAL_COLORS[0] },
+      { ax: 400, ay: 380, bx: 540, by: 80, color: PORTAL_COLORS[1] },
+    ],
+  },
+  {
     name: 'Crossfire',
     checkpoints: [{ x: 720, y: 100 }],
     lasers: [
@@ -361,6 +416,19 @@ const BUILTIN_LEVELS = [
       { x: 700, y: 300, a: P2, arms: 2, len: 270, blink: [1.4, 1.1, 0.75], color: CYAN },
       { x: 475, y: 300, my: 200, period: 4, spin: 2.2, arms: 4, len: 55, color: ORANGE },
     ],
+  },
+  {
+    name: 'Wormhole',
+    // A solid wall splits the room. Find the portal.
+    checkpoints: [{ x: 520, y: 540 }],
+    lasers: [
+      { x: 320, y: 300, a: P2, arms: 2, len: 110, my: 160, period: 3, color: RED },
+      { x: 450, y: 200, spin: 2, arms: 1, len: 120, color: GOLD },
+      { x: 690, y: 300, spin: -1.1, arms: 4, len: 150, color: ORANGE },
+      { x: 830, y: 300, a: P2, arms: 2, len: 270, blink: [1.2, 1.0, 0.3], color: CYAN },
+    ],
+    walls: [{ x: 450, y: 30, w: 30, h: 540 }],
+    portals: [{ ax: 380, ay: 120, bx: 560, by: 470, color: PORTAL_COLORS[0] }],
   },
   {
     name: 'Turnstiles',
@@ -487,6 +555,34 @@ const BUILTIN_LEVELS = [
     ],
   },
   {
+    name: 'Warehouse',
+    // Big room: three sections joined by guarded doorways, and a portal around a laser fence.
+    w: 1800, h: 1000,
+    checkpoints: [{ x: 600, y: 950 }, { x: 1260, y: 60 }, { x: 1250, y: 950 }],
+    lasers: [
+      { x: 270, y: 330, spin: 1.2, arms: 2, len: 150, color: RED },
+      { x: 270, y: 730, spin: -1.2, arms: 2, len: 150, color: RED },
+      { x: 300, y: 530, spin: 1.5, arms: 4, len: 110, color: ORANGE },
+      { x: 515, y: 450, a: P2, spin: 2, arms: 1, len: 160, color: GOLD },
+      { x: 700, y: 530, a: P2, arms: 2, len: 120, my: 380, period: 3.2, phase: 0, color: GREEN },
+      { x: 850, y: 530, a: P2, arms: 2, len: 120, my: 380, period: 3.2, phase: 0.33, color: GREEN },
+      { x: 1000, y: 530, a: P2, arms: 2, len: 120, my: 380, period: 3.2, phase: 0.66, color: GREEN },
+      { x: 1145, y: 190, a: -P2, spin: -2.2, arms: 1, len: 150, color: GOLD },
+      { x: 1650, y: 265, a: P2, arms: 2, len: 235, color: RED },
+      { x: 1400, y: 30, a: P2, sweep: 0.7, sweepSpeed: 1.0, arms: 1, len: 480, color: PURPLE },
+      { x: 1550, y: 300, mx: 90, my: 90, orbit: true, period: 4, spin: 2, arms: 2, len: 40, color: ORANGE },
+      { x: 1500, y: 780, spin: 1.1, arms: 1, len: 230, color: GOLD },
+      { x: 1720, y: 780, a: P2, arms: 2, len: 250, blink: [1.2, 1.0, 0], color: CYAN },
+    ],
+    walls: [
+      { x: 500, y: 30, w: 30, h: 420 },
+      { x: 500, y: 610, w: 30, h: 420 },
+      { x: 1130, y: 190, w: 30, h: 840 },
+      { x: 1160, y: 500, w: 670, h: 30 },
+    ],
+    portals: [{ ax: 1550, ay: 300, bx: 1250, by: 800, color: PORTAL_COLORS[2] }],
+  },
+  {
     name: 'Final Exam',
     checkpoints: [{ x: 290, y: 540 }, { x: 630, y: 50 }],
     lasers: [
@@ -527,7 +623,22 @@ function normalizeLevel(l, id) {
     lasers: objs(l.lasers).map(normalizeLaser),
     walls: objs(l.walls).map(normalizeWall),
     checkpoints: objs(l.checkpoints).map((c) => ({ x: num(c.x, 480), y: num(c.y, 300) })),
+    portals: objs(l.portals).map((p) => ({
+      ax: num(p.ax, 360), ay: num(p.ay, 300), bx: num(p.bx, 600), by: num(p.by, 300),
+      color: typeof p.color === 'string' ? p.color : PORTAL_COLORS[0],
+    })),
+    w: Math.round(Math.max(400, Math.min(3000, num(l.w, ROOM_W)))),
+    h: Math.round(Math.max(300, Math.min(2000, num(l.h, ROOM_H)))),
   };
+}
+
+// If (x, y) is inside a portal end, returns where the player comes out; otherwise null.
+function portalAt(level, x, y) {
+  for (const p of level.portals) {
+    if (Math.hypot(x - p.ax, y - p.ay) < PORTAL_R) return { x: p.bx, y: p.by };
+    if (Math.hypot(x - p.bx, y - p.by) < PORTAL_R) return { x: p.ax, y: p.ay };
+  }
+  return null;
 }
 
 const isStatic = (L) => !L.spin && !L.sweep && !L.mx && !L.my;
@@ -773,7 +884,9 @@ function renderLevels() {
   for (const lvl of customLevels) {
     const card = el('div', 'card');
     const info = `${lvl.lasers.length} lasers` + (lvl.walls.length ? ` · ${lvl.walls.length} walls` : '')
-      + (lvl.checkpoints.length ? ` · ${lvl.checkpoints.length} ⚑` : '');
+      + (lvl.checkpoints.length ? ` · ${lvl.checkpoints.length} ⚑` : '')
+      + (lvl.portals.length ? ` · ${lvl.portals.length} ◉` : '')
+      + (lvl.w !== ROOM_W || lvl.h !== ROOM_H ? ` · ${lvl.w}×${lvl.h}` : '');
     card.append(el('span', 'num', info), el('span', 'name', lvl.name || 'Untitled'), bestLabel(lvl.id));
     const actions = el('div', 'actions');
     const play = el('button', 'mini', '▶ Play');
@@ -830,12 +943,21 @@ const game = {
   session: null, // { kind: 'campaign' | 'single' | 'test', levels }
   index: 0,
   t: 0, levelTime: 0, totalTime: 0, deaths: 0,
-  player: { x: START_X, y: START_Y, alive: true },
+  player: { x: 70, y: 300, alive: true },
   respawnTimer: 0, modeTimer: 0, shake: 0, flash: 0, newBest: false,
   checkpoint: -1, // index of the checkpoint the player respawns at, -1 = start
   checkpointFlash: 0,
+  // Where the player last came out of a portal. Portals stay inactive until they step off it.
+  portalLock: null,
+  cam: { x: 0, y: 0 },
   particles: [], trail: [],
 };
+
+// Camera offset (screen = world + cam). Rooms that fit are centered; bigger ones follow the focus point.
+function followCamera(room, fx, fy) {
+  const axis = (size, view, f) => (size <= view ? (view - size) / 2 : Math.max(view - size, Math.min(0, view / 2 - f)));
+  return { x: axis(room.w, W, fx), y: axis(room.h, H, fy) };
+}
 const CHECKPOINT_R = 16;
 const currentLevel = () => (game.session ? game.session.levels[game.index] : BUILTIN[0]);
 
@@ -859,9 +981,23 @@ function loadLevel() {
 // resetClock = full level restart (also forgets checkpoints); otherwise respawn at the last checkpoint.
 function resetPlayer(resetClock) {
   if (resetClock) { game.t = 0; game.levelTime = 0; game.checkpoint = -1; game.checkpointFlash = 0; }
-  const cp = currentLevel().checkpoints[game.checkpoint];
-  Object.assign(game.player, { x: cp ? cp.x : START_X, y: cp ? cp.y : START_Y, alive: true });
+  const lvl = currentLevel(), room = roomOf(lvl);
+  const cp = lvl.checkpoints[game.checkpoint];
+  Object.assign(game.player, { x: cp ? cp.x : room.startX, y: cp ? cp.y : room.startY, alive: true });
+  // Don't let a spawn point that overlaps a portal teleport the player instantly.
+  game.portalLock = { x: game.player.x, y: game.player.y };
   game.trail = [];
+  game.cam = followCamera(room, game.player.x, game.player.y);
+}
+
+function emitParticles(x, y, n, colors, speed) {
+  for (let k = 0; k < n; k++) {
+    const ang = Math.random() * TAU, sp = speed * (0.25 + Math.random());
+    game.particles.push({
+      x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+      life: 0.4 + Math.random() * 0.4, color: colors[k % colors.length],
+    });
+  }
 }
 
 function onConfirm() {
@@ -932,12 +1068,30 @@ function updateGame(dt) {
     p.x += (dx / m) * sp * dt;
     p.y += (dy / m) * sp * dt;
   }
+  const room = roomOf(lvl);
   pushOutOfWalls(p, PLAYER_R, lvl.walls);
-  p.x = Math.max(ROOM.x0 + PLAYER_R, Math.min(ROOM.x1 - PLAYER_R, p.x));
-  p.y = Math.max(ROOM.y0 + PLAYER_R, Math.min(ROOM.y1 - PLAYER_R, p.y));
+  p.x = Math.max(room.x0 + PLAYER_R, Math.min(room.x1 - PLAYER_R, p.x));
+  p.y = Math.max(room.y0 + PLAYER_R, Math.min(room.y1 - PLAYER_R, p.y));
+
+  if (game.portalLock && Math.hypot(p.x - game.portalLock.x, p.y - game.portalLock.y) > PORTAL_R + PLAYER_R) {
+    game.portalLock = null;
+  }
+  const dest = game.portalLock ? null : portalAt(lvl, p.x, p.y);
+  if (dest) {
+    emitParticles(p.x, p.y, 18, ['#ffffff', '#b36bff'], 140);
+    p.x = dest.x;
+    p.y = dest.y;
+    game.portalLock = { x: dest.x, y: dest.y };
+    game.trail = [];
+    emitParticles(p.x, p.y, 18, ['#ffffff', '#6cf6ff'], 140);
+  }
 
   game.trail.push({ x: p.x, y: p.y });
   if (game.trail.length > 12) game.trail.shift();
+
+  const target = followCamera(room, p.x, p.y), ease = Math.min(1, dt * 10);
+  game.cam.x += (target.x - game.cam.x) * ease;
+  game.cam.y += (target.y - game.cam.y) * ease;
 
   if (hitsPoint(lvl, game.t, p.x, p.y, PLAYER_R + BEAM_HALF - 1)) { killPlayer(); return; }
 
@@ -946,16 +1100,10 @@ function updateGame(dt) {
     if (i === game.checkpoint || Math.hypot(p.x - cp.x, p.y - cp.y) > CHECKPOINT_R + PLAYER_R) return;
     game.checkpoint = i;
     game.checkpointFlash = 1.4;
-    for (let k = 0; k < 24; k++) {
-      const ang = Math.random() * TAU, sp = 40 + Math.random() * 160;
-      game.particles.push({
-        x: cp.x, y: cp.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
-        life: 0.4 + Math.random() * 0.4, color: Math.random() < 0.5 ? '#7dff6b' : '#ffffff',
-      });
-    }
+    emitParticles(cp.x, cp.y, 24, ['#7dff6b', '#ffffff'], 130);
   });
 
-  if (p.x > EXIT_X) {
+  if (p.x > room.exitX) {
     game.mode = 'cleared';
     game.modeTimer = 0;
     const key = bestKey(lvl.id);
@@ -968,54 +1116,92 @@ function updateGame(dt) {
 }
 
 // ---------- Drawing ----------
-function drawRoom(t, warnStart) {
+function drawRoom(room, t, warnStart) {
+  const { x0, y0, x1, y1 } = room, midY = (y0 + y1) / 2;
   ctx.fillStyle = '#10111c';
-  ctx.fillRect(ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0);
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
   ctx.strokeStyle = 'rgba(255,255,255,0.035)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  for (let x = ROOM.x0; x <= ROOM.x1; x += 40) { ctx.moveTo(x, ROOM.y0); ctx.lineTo(x, ROOM.y1); }
-  for (let y = ROOM.y0; y <= ROOM.y1; y += 40) { ctx.moveTo(ROOM.x0, y); ctx.lineTo(ROOM.x1, y); }
+  for (let x = x0; x <= x1; x += 40) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
+  for (let y = y0; y <= y1; y += 40) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
   ctx.stroke();
 
   const pulse = 0.5 + 0.5 * Math.sin(t * 3);
   ctx.fillStyle = warnStart ? `rgba(255, 51, 85, ${0.1 + pulse * 0.12})` : 'rgba(80, 255, 170, 0.07)';
-  ctx.fillRect(ROOM.x0, ROOM.y0, 80, ROOM.y1 - ROOM.y0);
+  ctx.fillRect(x0, y0, 80, y1 - y0);
   ctx.fillStyle = warnStart ? 'rgba(255, 120, 140, 0.8)' : 'rgba(80, 255, 170, 0.35)';
   ctx.font = '600 11px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.save();
-  ctx.translate(ROOM.x0 + 14, H / 2);
+  ctx.translate(x0 + 14, midY);
   ctx.rotate(-Math.PI / 2);
   ctx.fillText('START', 0, 0);
   ctx.restore();
 
-  const g = ctx.createLinearGradient(EXIT_X - 20, 0, ROOM.x1, 0);
+  const g = ctx.createLinearGradient(room.exitX - 20, 0, x1, 0);
   g.addColorStop(0, 'rgba(255, 215, 90, 0)');
   g.addColorStop(1, `rgba(255, 215, 90, ${0.15 + pulse * 0.12})`);
   ctx.fillStyle = g;
-  ctx.fillRect(EXIT_X - 20, ROOM.y0, ROOM.x1 - EXIT_X + 20, ROOM.y1 - ROOM.y0);
+  ctx.fillRect(room.exitX - 20, y0, x1 - room.exitX + 20, y1 - y0);
   ctx.setLineDash([8, 8]);
   ctx.strokeStyle = `rgba(255, 215, 90, ${0.35 + pulse * 0.3})`;
-  ctx.beginPath(); ctx.moveTo(EXIT_X, ROOM.y0); ctx.lineTo(EXIT_X, ROOM.y1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(room.exitX, y0); ctx.lineTo(room.exitX, y1); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = `rgba(255, 215, 90, ${0.6 + pulse * 0.3})`;
   ctx.save();
-  ctx.translate(ROOM.x1 - 14, H / 2);
+  ctx.translate(x1 - 14, midY);
   ctx.rotate(Math.PI / 2);
   ctx.fillText('EXIT', 0, 0);
   ctx.restore();
 
   ctx.fillStyle = '#1d1f33';
-  ctx.fillRect(0, 0, W, WALL);
-  ctx.fillRect(0, H - WALL, W, WALL);
-  ctx.fillRect(0, 0, WALL, H);
-  ctx.fillRect(W - WALL, 0, WALL, H);
+  ctx.fillRect(0, 0, room.w, WALL);
+  ctx.fillRect(0, room.h - WALL, room.w, WALL);
+  ctx.fillRect(0, 0, WALL, room.h);
+  ctx.fillRect(room.w - WALL, 0, WALL, room.h);
   ctx.fillStyle = `rgba(255, 215, 90, ${0.5 + pulse * 0.4})`;
-  ctx.fillRect(W - WALL, H / 2 - 60, 6, 120);
+  ctx.fillRect(room.w - WALL, midY - 60, 6, 120);
   ctx.strokeStyle = '#2c2f4a';
   ctx.lineWidth = 2;
-  ctx.strokeRect(ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0);
+  ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+}
+
+// Portal pairs: two swirling rings of the same color. `showLinks` draws a faint line between the ends.
+function drawPortals(portals, t, showLinks) {
+  portals.forEach((p, i) => {
+    ctx.save();
+    if (showLinks) {
+      ctx.strokeStyle = p.color;
+      ctx.globalAlpha = 0.25;
+      ctx.setLineDash([3, 7]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(p.ax, p.ay); ctx.lineTo(p.bx, p.by); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+    for (const [x, y, dir] of [[p.ax, p.ay, 1], [p.bx, p.by, -1]]) {
+      const glow = ctx.createRadialGradient(x, y, 2, x, y, PORTAL_R + 6);
+      glow.addColorStop(0, '#ffffff');
+      glow.addColorStop(0.35, p.color);
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(x, y, PORTAL_R + 6, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 16;
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 3;
+      const spin = t * 2.5 * dir + i;
+      for (let k = 0; k < 3; k++) {
+        const a = spin + (k * TAU) / 3;
+        ctx.beginPath(); ctx.arc(x, y, PORTAL_R, a, a + 1.3); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  });
 }
 
 // Checkpoint pads: a ring with a flag. The active one (respawn point) glows green.
@@ -1064,7 +1250,8 @@ function strokeSegs(segs) {
 function drawLasers(level, t) {
   ctx.save();
   ctx.beginPath();
-  ctx.rect(ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0);
+  const room = roomOf(level);
+  ctx.rect(room.x0, room.y0, room.x1 - room.x0, room.y1 - room.y0);
   ctx.clip();
   ctx.lineCap = 'round';
 
@@ -1217,9 +1404,12 @@ function renderGame() {
   ctx.save();
   ctx.translate(0, HUD);
   if (game.shake > 0) ctx.translate((Math.random() - 0.5) * game.shake, (Math.random() - 0.5) * game.shake);
-  drawRoom(game.t, false);
+  ctx.save();
+  ctx.translate(Math.round(game.cam.x), Math.round(game.cam.y));
+  drawRoom(roomOf(lvl), game.t, false);
   drawWalls(lvl.walls);
   drawCheckpoints(lvl.checkpoints, game.checkpoint, game.t);
+  drawPortals(lvl.portals, game.t, false);
   drawLasers(lvl, game.t);
   if (game.player.alive && game.mode !== 'title') drawPlayerAt(game.player.x, game.player.y, game.trail);
   if (game.checkpointFlash > 0 && game.mode === 'playing') {
@@ -1240,6 +1430,8 @@ function renderGame() {
     ctx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
   }
   ctx.globalAlpha = 1;
+  ctx.restore(); // back to screen space
+
   if (game.flash > 0) {
     ctx.fillStyle = `rgba(255, 40, 70, ${game.flash * 0.25})`;
     ctx.fillRect(0, 0, W, H);
@@ -1274,7 +1466,11 @@ function renderGame() {
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '12px system-ui, sans-serif';
-    ctx.fillText(kind === 'test' ? 'R to restart · Esc back to editor' : 'R to restart level', ROOM.x1 - 8, H - 10);
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.fillText(kind === 'test' ? 'R to restart · Esc back to editor' : 'R to restart level', W - 38, H - 10);
+    ctx.shadowBlur = 0;
   }
   ctx.restore();
 }
@@ -1291,10 +1487,12 @@ const PRESETS = {
   blinker: { arms: 2, len: 270, a: P2, blink: [1.2, 1, 0], color: CYAN },
   orbiter: { mx: 140, my: 140, orbit: true, period: 5, arms: 3, len: 50, spin: 2.5, color: GREEN },
 };
+// max can be a function so position sliders follow the current room size.
+const roomX1 = () => roomOf(editor.level).x1, roomY1 = () => roomOf(editor.level).y1;
 const LASER_GROUPS = [
   ['Position', [
-    { k: 'x', label: 'X', min: 30, max: 930, step: 5 },
-    { k: 'y', label: 'Y', min: 30, max: 570, step: 5 },
+    { k: 'x', label: 'X', min: 30, max: roomX1, step: 5 },
+    { k: 'y', label: 'Y', min: 30, max: roomY1, step: 5 },
   ]],
   ['Beam', [
     { k: 'len', label: 'Length', min: 10, max: 600, step: 5 },
@@ -1329,24 +1527,34 @@ const LASER_GROUPS = [
 ];
 const WALL_GROUPS = [
   ['Position', [
-    { k: 'x', label: 'X', min: 0, max: 930, step: 5 },
-    { k: 'y', label: 'Y', min: 0, max: 570, step: 5 },
+    { k: 'x', label: 'X', min: 0, max: roomX1, step: 5 },
+    { k: 'y', label: 'Y', min: 0, max: roomY1, step: 5 },
   ]],
   ['Size', [
-    { k: 'w', label: 'Width', min: 10, max: 900, step: 5 },
-    { k: 'h', label: 'Height', min: 10, max: 540, step: 5 },
+    { k: 'w', label: 'Width', min: 10, max: () => editor.level.w, step: 5 },
+    { k: 'h', label: 'Height', min: 10, max: () => editor.level.h, step: 5 },
   ]],
 ];
 const CHECKPOINT_GROUPS = [
   ['Position', [
-    { k: 'x', label: 'X', min: 30, max: 930, step: 5 },
-    { k: 'y', label: 'Y', min: 30, max: 570, step: 5 },
+    { k: 'x', label: 'X', min: 30, max: roomX1, step: 5 },
+    { k: 'y', label: 'Y', min: 30, max: roomY1, step: 5 },
+  ]],
+];
+const PORTAL_GROUPS = [
+  ['End A', [
+    { k: 'ax', label: 'X', min: 30, max: roomX1, step: 5 },
+    { k: 'ay', label: 'Y', min: 30, max: roomY1, step: 5 },
+  ]],
+  ['End B', [
+    { k: 'bx', label: 'X', min: 30, max: roomX1, step: 5 },
+    { k: 'by', label: 'Y', min: 30, max: roomY1, step: 5 },
   ]],
 ];
 
 const editor = {
   level: normalizeLevel(store.get('laserroom.draft', null) || { name: 'My Level' }),
-  sel: null, // { kind: 'laser' | 'wall' | 'checkpoint', i } — kind + 's' names the list in the level
+  sel: null, // { kind: 'laser' | 'wall' | 'checkpoint' | 'portal', i, end? } — kind + 's' names the list in the level
   t: 0, animate: true, snap: true, drag: null, warnStart: false,
 };
 {
@@ -1363,12 +1571,12 @@ let warnTimer;
 function scheduleWarnCheck() {
   clearTimeout(warnTimer);
   warnTimer = setTimeout(() => {
-    const lvl = editor.level, problems = [];
+    const lvl = editor.level, room = roomOf(lvl), problems = [];
     let laserHit = false;
-    for (let t = 0; t < 30 && !laserHit; t += 0.04) laserHit = hitsPoint(lvl, t, START_X, START_Y, PLAYER_R + BEAM_HALF + 2);
+    for (let t = 0; t < 30 && !laserHit; t += 0.04) laserHit = hitsPoint(lvl, t, room.startX, room.startY, PLAYER_R + BEAM_HALF + 2);
     if (laserHit) problems.push("A laser can hit the player's spawn point.");
-    const startBlocked = circleInWall(START_X, START_Y, PLAYER_R + 2, lvl.walls);
-    const reach = startBlocked ? null : floodFromStart(lvl.walls);
+    const startBlocked = circleInWall(room.startX, room.startY, PLAYER_R + 2, lvl.walls);
+    const reach = startBlocked ? null : floodFromStart(lvl);
     if (startBlocked) problems.push("A wall is covering the player's spawn point.");
     else if (!reach.exit) problems.push('Walls block every path to the exit.');
     let cpBad = false;
@@ -1382,6 +1590,11 @@ function scheduleWarnCheck() {
       else return;
       cpBad = true;
     });
+    lvl.portals.forEach((p, i) => {
+      if (circleInWall(p.ax, p.ay, PLAYER_R, lvl.walls) || circleInWall(p.bx, p.by, PLAYER_R, lvl.walls)) {
+        problems.push(`Portal ${i + 1} has an end inside a wall.`);
+      }
+    });
     editor.warnStart = laserHit || startBlocked;
     $('#edWarn').hidden = problems.length === 0;
     $('#edWarn').textContent = '⚠ ' + problems.join(' ');
@@ -1389,30 +1602,35 @@ function scheduleWarnCheck() {
 }
 
 // Flood fill over the room ignoring lasers: which spots can the player walk to from the start?
-function floodFromStart(walls) {
-  const C = 8, xs = [], ys = [];
-  for (let x = ROOM.x0 + PLAYER_R; x <= ROOM.x1 - PLAYER_R; x += C) xs.push(x);
-  for (let y = ROOM.y0 + PLAYER_R; y <= ROOM.y1 - PLAYER_R; y += C) ys.push(y);
+function floodFromStart(level) {
+  const room = roomOf(level), walls = level.walls, C = 8, xs = [], ys = [];
+  for (let x = room.x0 + PLAYER_R; x <= room.x1 - PLAYER_R; x += C) xs.push(x);
+  for (let y = room.y0 + PLAYER_R; y <= room.y1 - PLAYER_R; y += C) ys.push(y);
+  const cellOf = (x, y) => [
+    Math.max(0, Math.min(xs.length - 1, Math.round((x - xs[0]) / C))),
+    Math.max(0, Math.min(ys.length - 1, Math.round((y - ys[0]) / C))),
+  ];
   const seen = new Uint8Array(xs.length * ys.length);
-  const si = Math.round((START_X - xs[0]) / C), sj = Math.round((START_Y - ys[0]) / C);
+  const [si, sj] = cellOf(room.startX, room.startY);
   const queue = [[si, sj]];
   seen[sj * xs.length + si] = 1;
   let exit = false;
+  const visit = (ni, nj) => {
+    if (ni < 0 || nj < 0 || ni >= xs.length || nj >= ys.length) return;
+    const k = nj * xs.length + ni;
+    if (seen[k] || circleInWall(xs[ni], ys[nj], PLAYER_R, walls)) return;
+    seen[k] = 1;
+    queue.push([ni, nj]);
+  };
   while (queue.length) {
     const [i, j] = queue.pop();
-    if (xs[i] > EXIT_X) exit = true;
-    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const ni = i + di, nj = j + dj;
-      if (ni < 0 || nj < 0 || ni >= xs.length || nj >= ys.length) continue;
-      const k = nj * xs.length + ni;
-      if (seen[k] || circleInWall(xs[ni], ys[nj], PLAYER_R, walls)) continue;
-      seen[k] = 1;
-      queue.push([ni, nj]);
-    }
+    if (xs[i] > room.exitX) exit = true;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) visit(i + di, j + dj);
+    const dest = portalAt(level, xs[i], ys[j]);
+    if (dest) visit(...cellOf(dest.x, dest.y));
   }
   const has = (x, y) => {
-    const i = Math.max(0, Math.min(xs.length - 1, Math.round((x - xs[0]) / C)));
-    const j = Math.max(0, Math.min(ys.length - 1, Math.round((y - ys[0]) / C)));
+    const [i, j] = cellOf(x, y);
     return !!seen[j * xs.length + i];
   };
   return { exit, has };
@@ -1442,6 +1660,7 @@ function round(v, step) {
 
 function refreshEditorPanel() {
   $('#levelName').value = editor.level.name;
+  syncRoomInputs();
   $('#edAnimate').checked = editor.animate;
   $('#edSnap').checked = editor.snap;
   scheduleWarnCheck();
@@ -1451,7 +1670,8 @@ function refreshEditorPanel() {
   propInputs = {};
   const obj = selectedObj();
   if (!obj) {
-    const empty = !editor.level.lasers.length && !editor.level.walls.length && !editor.level.checkpoints.length;
+    const { lasers, walls, checkpoints, portals } = editor.level;
+    const empty = !lasers.length && !walls.length && !checkpoints.length && !portals.length;
     props.append(el('div', 'placeholder', empty ? 'Add a laser or wall above to get started.' : 'Click something on the map to edit it.'));
     return;
   }
@@ -1460,7 +1680,7 @@ function refreshEditorPanel() {
   const list = editor.level[kind + 's'];
   const head = el('div', 'ep-section');
   const top = el('div', 'sel-head');
-  const title = { laser: 'Laser', wall: 'Wall', checkpoint: 'Checkpoint' }[kind];
+  const title = { laser: 'Laser', wall: 'Wall', checkpoint: 'Checkpoint', portal: 'Portal' }[kind];
   top.append(el('strong', null, `${title} ${editor.sel.i + 1} of ${list.length}`));
   const dup = el('button', 'mini', 'Duplicate');
   dup.addEventListener('click', duplicateSelected);
@@ -1473,10 +1693,14 @@ function refreshEditorPanel() {
     head.append(el('p', 'muted small', 'Players respawn here after touching it. Put it somewhere no laser can reach.'));
   }
 
-  if (kind === 'laser') {
+  if (kind === 'portal') {
+    head.append(el('p', 'muted small', 'Stepping into either end puts the player at the other end. Drag each end on the map.'));
+  }
+
+  if (kind === 'laser' || kind === 'portal') {
     const sw = el('div', 'swatches');
     sw.style.marginTop = '10px';
-    for (const c of COLORS) {
+    for (const c of kind === 'portal' ? PORTAL_COLORS : COLORS) {
       const b = el('button', 'swatch' + (obj.color === c ? ' active' : ''));
       b.style.background = c;
       b.style.color = c;
@@ -1487,7 +1711,7 @@ function refreshEditorPanel() {
     head.append(sw);
   }
 
-  const groups = { laser: LASER_GROUPS, wall: WALL_GROUPS, checkpoint: CHECKPOINT_GROUPS }[kind];
+  const groups = { laser: LASER_GROUPS, wall: WALL_GROUPS, checkpoint: CHECKPOINT_GROUPS, portal: PORTAL_GROUPS }[kind];
   for (const [group, fields] of groups) {
     head.append(el('h4', 'group', group));
     for (const f of fields) head.append(buildField(obj, f));
@@ -1521,7 +1745,7 @@ function buildField(obj, f) {
   const range = el('input');
   range.type = 'range';
   range.id = id;
-  range.min = f.min; range.max = f.max; range.step = f.step;
+  range.min = f.min; range.max = typeof f.max === 'function' ? f.max() : f.max; range.step = f.step;
   const numIn = el('input');
   numIn.type = 'number';
   numIn.step = f.step;
@@ -1551,22 +1775,69 @@ function syncDimRows(obj) {
 }
 
 function syncPositionInputs() {
-  for (const k of ['x', 'y', 'w', 'h']) propInputs[k] && propInputs[k]();
+  for (const k of ['x', 'y', 'w', 'h', 'ax', 'ay', 'bx', 'by']) propInputs[k] && propInputs[k]();
+}
+
+// The x/y keys to move for the current selection (a portal moves only the grabbed end).
+function selPosKeys() {
+  return editor.sel.kind === 'portal' ? [editor.sel.end + 'x', editor.sel.end + 'y'] : ['x', 'y'];
+}
+
+// Editor view: zoom out so the whole room fits, never zoom in past 1:1.
+function editorCamera() {
+  const room = roomOf(editor.level);
+  const s = Math.min(1, W / room.w, H / room.h);
+  return { s, x: (W - room.w * s) / 2, y: (H - room.h * s) / 2 };
+}
+
+function toEditorWorld(e) {
+  const p = toLogical(e), cam = editorCamera();
+  return { x: (p.x - cam.x) / cam.s, y: (p.y - cam.y) / cam.s };
+}
+
+function syncRoomInputs() {
+  $('#roomW').value = $('#roomWNum').value = editor.level.w;
+  $('#roomH').value = $('#roomHNum').value = editor.level.h;
+}
+
+// Resize the room, pulling anything that would end up outside back in.
+function setRoomSize(w, h) {
+  const lvl = editor.level;
+  lvl.w = Math.round(Math.max(400, Math.min(3000, w || lvl.w)));
+  lvl.h = Math.round(Math.max(300, Math.min(2000, h || lvl.h)));
+  const room = roomOf(lvl);
+  const cx = (v) => Math.max(room.x0, Math.min(room.x1, v)), cy = (v) => Math.max(room.y0, Math.min(room.y1, v));
+  for (const o of [...lvl.lasers, ...lvl.checkpoints]) { o.x = cx(o.x); o.y = cy(o.y); }
+  for (const p of lvl.portals) { p.ax = cx(p.ax); p.ay = cy(p.ay); p.bx = cx(p.bx); p.by = cy(p.by); }
+  for (const w of lvl.walls) {
+    w.x = Math.max(room.x0 - w.w + 10, Math.min(room.x1 - 10, w.x));
+    w.y = Math.max(room.y0 - w.h + 10, Math.min(room.y1 - 10, w.y));
+  }
+  syncRoomInputs();
+  editorChanged();
 }
 
 function addPreset(name) {
-  if (name === 'wall') {
+  const room = roomOf(editor.level), mx = (room.x0 + room.x1) / 2, my = (room.y0 + room.y1) / 2;
+  if (name === 'portal') {
+    const n = editor.level.portals.length;
+    editor.level.portals.push({
+      ax: mx - 150, ay: my - 60 + (n % 4) * 40, bx: mx + 150, by: my - 60 + (n % 4) * 40,
+      color: PORTAL_COLORS[n % PORTAL_COLORS.length],
+    });
+    editor.sel = { kind: 'portal', i: editor.level.portals.length - 1, end: 'a' };
+  } else if (name === 'wall') {
     const n = editor.level.walls.length;
-    editor.level.walls.push(normalizeWall({ x: 420 + ((n % 5) - 2) * 30, y: 280 + ((n % 5) - 2) * 30, w: 120, h: 40 }));
+    editor.level.walls.push(normalizeWall({ x: mx - 60 + ((n % 5) - 2) * 30, y: my - 20 + ((n % 5) - 2) * 30, w: 120, h: 40 }));
     editor.sel = { kind: 'wall', i: editor.level.walls.length - 1 };
   } else if (name === 'checkpoint') {
     const n = editor.level.checkpoints.length;
-    editor.level.checkpoints.push({ x: 300 + (n % 4) * 120, y: 300 });
+    editor.level.checkpoints.push({ x: mx - 180 + (n % 4) * 120, y: my });
     editor.sel = { kind: 'checkpoint', i: editor.level.checkpoints.length - 1 };
   } else {
     const n = editor.level.lasers.length;
-    const base = { x: 480 + ((n % 5) - 2) * 30, y: 300, ...PRESETS[name] };
-    if (name === 'sweeper') base.x = 480 + ((n % 5) - 2) * 60;
+    const base = { x: mx + ((n % 5) - 2) * 30, y: my, ...PRESETS[name] };
+    if (name === 'sweeper') base.x = mx + ((n % 5) - 2) * 60;
     editor.level.lasers.push(normalizeLaser(base));
     editor.sel = { kind: 'laser', i: editor.level.lasers.length - 1 };
   }
@@ -1578,8 +1849,12 @@ function duplicateSelected() {
   const obj = selectedObj();
   if (!obj) return;
   const list = editor.level[editor.sel.kind + 's'];
-  list.push({ ...obj, x: obj.x + 30, y: obj.y + 30 });
-  editor.sel = { kind: editor.sel.kind, i: list.length - 1 };
+  const copy = editor.sel.kind === 'portal'
+    ? { ...obj, ax: obj.ax + 30, ay: obj.ay + 30, bx: obj.bx + 30, by: obj.by + 30 }
+    : { ...obj, x: obj.x + 30, y: obj.y + 30 };
+  list.push(copy);
+  editor.sel = { ...editor.sel, i: list.length - 1 };
+  clampObj(copy);
   editorChanged();
   refreshEditorPanel();
 }
@@ -1603,8 +1878,9 @@ function editorKey(e) {
   const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
   if (moves[e.code]) {
     e.preventDefault();
-    obj.x += moves[e.code][0];
-    obj.y += moves[e.code][1];
+    const [kx, ky] = selPosKeys();
+    obj[kx] += moves[e.code][0];
+    obj[ky] += moves[e.code][1];
     clampObj(obj);
     syncPositionInputs();
     editorChanged();
@@ -1612,32 +1888,42 @@ function editorKey(e) {
 }
 
 function clampObj(obj) {
+  const room = roomOf(editor.level);
+  const cx = (v) => Math.max(room.x0, Math.min(room.x1, v)), cy = (v) => Math.max(room.y0, Math.min(room.y1, v));
   if (editor.sel.kind === 'wall') {
-    obj.x = Math.max(ROOM.x0 - obj.w + 10, Math.min(ROOM.x1 - 10, obj.x));
-    obj.y = Math.max(ROOM.y0 - obj.h + 10, Math.min(ROOM.y1 - 10, obj.y));
+    obj.x = Math.max(room.x0 - obj.w + 10, Math.min(room.x1 - 10, obj.x));
+    obj.y = Math.max(room.y0 - obj.h + 10, Math.min(room.y1 - 10, obj.y));
+  } else if (editor.sel.kind === 'portal') {
+    obj.ax = cx(obj.ax); obj.ay = cy(obj.ay); obj.bx = cx(obj.bx); obj.by = cy(obj.by);
   } else {
-    obj.x = Math.max(ROOM.x0, Math.min(ROOM.x1, obj.x));
-    obj.y = Math.max(ROOM.y0, Math.min(ROOM.y1, obj.y));
+    obj.x = cx(obj.x);
+    obj.y = cy(obj.y);
   }
 }
 
 const HANDLE = 10;
 function editorHitTest(x, y) {
-  const { lasers, walls, checkpoints } = editor.level;
+  const { lasers, walls, checkpoints, portals } = editor.level;
+  const k = 1 / editorCamera().s; // keep grab targets the same size on screen when zoomed out
   const cur = selectedObj();
-  if (cur && editor.sel.kind === 'wall' && Math.abs(x - (cur.x + cur.w)) < HANDLE && Math.abs(y - (cur.y + cur.h)) < HANDLE) {
+  if (cur && editor.sel.kind === 'wall' && Math.abs(x - (cur.x + cur.w)) < HANDLE * k && Math.abs(y - (cur.y + cur.h)) < HANDLE * k) {
     return { kind: 'wall', i: editor.sel.i, resize: true };
   }
+  for (let i = portals.length - 1; i >= 0; i--) {
+    const p = portals[i];
+    if (Math.hypot(p.ax - x, p.ay - y) < (PORTAL_R + 2) * k) return { kind: 'portal', i, end: 'a' };
+    if (Math.hypot(p.bx - x, p.by - y) < (PORTAL_R + 2) * k) return { kind: 'portal', i, end: 'b' };
+  }
   for (let i = checkpoints.length - 1; i >= 0; i--) {
-    if (Math.hypot(checkpoints[i].x - x, checkpoints[i].y - y) < CHECKPOINT_R + 2) return { kind: 'checkpoint', i };
+    if (Math.hypot(checkpoints[i].x - x, checkpoints[i].y - y) < (CHECKPOINT_R + 2) * k) return { kind: 'checkpoint', i };
   }
   for (let i = lasers.length - 1; i >= 0; i--) {
     const s = laserState(lasers[i], editor.t, walls);
-    if (Math.hypot(s.px - x, s.py - y) < 16) return { kind: 'laser', i };
+    if (Math.hypot(s.px - x, s.py - y) < 16 * k) return { kind: 'laser', i };
   }
   for (let i = lasers.length - 1; i >= 0; i--) {
     const s = laserState(lasers[i], editor.t, walls);
-    for (const [ax, ay, bx, by] of s.segs) if (segDist(x, y, ax, ay, bx, by) < 8) return { kind: 'laser', i };
+    for (const [ax, ay, bx, by] of s.segs) if (segDist(x, y, ax, ay, bx, by) < 8 * k) return { kind: 'laser', i };
   }
   for (let i = walls.length - 1; i >= 0; i--) {
     const w = walls[i];
@@ -1648,17 +1934,18 @@ function editorHitTest(x, y) {
 
 canvas.addEventListener('pointerdown', (e) => {
   if (view !== 'editor') return;
-  const { x, y } = toLogical(e);
+  const { x, y } = toEditorWorld(e);
   const hit = editorHitTest(x, y);
   const changed = !hit || !editor.sel || hit.kind !== editor.sel.kind || hit.i !== editor.sel.i;
-  editor.sel = hit ? { kind: hit.kind, i: hit.i } : null;
+  editor.sel = hit ? { kind: hit.kind, i: hit.i, end: hit.end } : null;
   if (changed) refreshEditorPanel();
   if (!hit) return;
   const obj = selectedObj();
   if (hit.resize) {
     editor.drag = { resize: true };
   } else if (hit.kind !== 'laser') {
-    editor.drag = { grabDX: x - obj.x, grabDY: y - obj.y };
+    const [kx, ky] = selPosKeys();
+    editor.drag = { grabDX: x - obj[kx], grabDY: y - obj[ky] };
   } else {
     const s = laserState(obj, editor.t, editor.level.walls);
     editor.drag = { grabDX: x - s.px, grabDY: y - s.py };
@@ -1668,7 +1955,7 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   if (view !== 'editor') { canvas.style.cursor = 'default'; return; }
-  const { x, y } = toLogical(e);
+  const { x, y } = toEditorWorld(e);
   const obj = selectedObj();
   const snap = (v) => (editor.snap ? Math.round(v / 10) * 10 : Math.round(v));
   if (editor.drag && obj) {
@@ -1676,8 +1963,9 @@ canvas.addEventListener('pointermove', (e) => {
       obj.w = Math.max(10, snap(x) - obj.x);
       obj.h = Math.max(10, snap(y) - obj.y);
     } else if (editor.sel.kind !== 'laser') {
-      obj.x = snap(x - editor.drag.grabDX);
-      obj.y = snap(y - editor.drag.grabDY);
+      const [kx, ky] = selPosKeys();
+      obj[kx] = snap(x - editor.drag.grabDX);
+      obj[ky] = snap(y - editor.drag.grabDY);
     } else {
       // Keep the grabbed point under the cursor even if the pivot is currently offset along its path.
       const s = laserState(obj, editor.t, editor.level.walls);
@@ -1698,6 +1986,16 @@ canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 
 document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => addPreset(b.dataset.preset)));
+$('#roomW').addEventListener('input', (e) => setRoomSize(+e.target.value, 0));
+$('#roomH').addEventListener('input', (e) => setRoomSize(0, +e.target.value));
+$('#roomWNum').addEventListener('change', (e) => { setRoomSize(+e.target.value, 0); refreshEditorPanel(); });
+$('#roomHNum').addEventListener('change', (e) => { setRoomSize(0, +e.target.value); refreshEditorPanel(); });
+for (const id of ['#roomW', '#roomH']) $(id).addEventListener('change', refreshEditorPanel);
+document.querySelectorAll('[data-room]').forEach((b) => b.addEventListener('click', () => {
+  const [w, h] = b.dataset.room.split(',').map(Number);
+  setRoomSize(w, h);
+  refreshEditorPanel();
+}));
 $('#levelName').addEventListener('input', (e) => { editor.level.name = e.target.value; saveDraft(); });
 $('#edAnimate').addEventListener('change', (e) => { editor.animate = e.target.checked; });
 $('#edSnap').addEventListener('change', (e) => { editor.snap = e.target.checked; });
@@ -1707,17 +2005,19 @@ $('#edTime').addEventListener('input', (e) => {
   $('#edAnimate').checked = false;
 });
 $('#edTimeReset').addEventListener('click', () => { editor.t = 0; });
+const levelHasStuff = (l) => l.lasers.length || l.walls.length || l.checkpoints.length || l.portals.length;
 $('#edNew').addEventListener('click', () => {
   const lvl = editor.level;
-  if ((lvl.lasers.length || lvl.walls.length || lvl.checkpoints.length) && !confirm('Start a new level? Unsaved changes to this one will be lost.')) return;
+  if (levelHasStuff(lvl) && !confirm('Start a new level? Unsaved changes to this one will be lost.')) return;
   newEditorLevel();
 });
 $('#edClear').addEventListener('click', () => {
   const lvl = editor.level;
-  if (!(lvl.lasers.length || lvl.walls.length || lvl.checkpoints.length) || !confirm('Remove all lasers, walls and checkpoints from this level?')) return;
+  if (!levelHasStuff(lvl) || !confirm('Remove everything from this level?')) return;
   lvl.lasers = [];
   lvl.walls = [];
   lvl.checkpoints = [];
+  lvl.portals = [];
   editor.sel = null;
   editorChanged();
   refreshEditorPanel();
@@ -1741,7 +2041,8 @@ $('#edTest').addEventListener('click', () => {
 
 const jsonDialog = $('#jsonDialog');
 function roundJSON(level) {
-  return JSON.stringify({ name: level.name, lasers: level.lasers, walls: level.walls, checkpoints: level.checkpoints },
+  const { name, w, h, lasers, walls, checkpoints, portals } = level;
+  return JSON.stringify({ name, w, h, lasers, walls, checkpoints, portals },
     (k, v) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v), 1);
 }
 $('#edExport').addEventListener('click', () => {
@@ -1794,6 +2095,15 @@ function drawSelection() {
     ctx.restore();
     return;
   }
+  if (editor.sel.kind === 'portal') {
+    const [kx, ky] = selPosKeys();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.arc(obj[kx], obj[ky], PORTAL_R + 7, 0, TAU); ctx.stroke();
+    ctx.restore();
+    return;
+  }
   if (editor.sel.kind === 'checkpoint') {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
@@ -1841,24 +2151,33 @@ function renderEditor(dt) {
   const lvl = editor.level;
   ctx.fillStyle = '#07070d';
   ctx.fillRect(0, 0, W, H + HUD);
+  const room = roomOf(lvl), cam = editorCamera();
   drawHUDBar('Editor', lvl.name || 'Untitled', [
-    { text: `${lvl.lasers.length} lasers · ${lvl.walls.length} walls · ${lvl.checkpoints.length} checkpoints`, color: '#8b8fb8' },
+    { text: `${lvl.w}×${lvl.h}${cam.s < 1 ? ` · ${Math.round(cam.s * 100)}%` : ''}`, color: '#8b8fb8' },
     { text: `t ${editor.t.toFixed(1)}s`, mono: true },
   ]);
   ctx.save();
   ctx.translate(0, HUD);
-  drawRoom(editor.t, editor.warnStart);
+  ctx.save();
+  ctx.translate(cam.x, cam.y);
+  ctx.scale(cam.s, cam.s);
+  drawRoom(room, editor.t, editor.warnStart);
   drawWalls(lvl.walls);
   drawCheckpoints(lvl.checkpoints, -1, editor.t);
+  drawPortals(lvl.portals, editor.t, true);
   ctx.globalAlpha = 0.45;
-  drawPlayerAt(START_X, START_Y);
+  drawPlayerAt(room.startX, room.startY);
   ctx.globalAlpha = 1;
   drawLasers(lvl, editor.t);
   drawSelection();
+  ctx.restore();
   ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.shadowColor = '#000';
+  ctx.shadowBlur = 4;
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.font = '12px system-ui, sans-serif';
-  ctx.fillText('Drag to move · Drag a wall\'s corner to resize · Arrows nudge · Delete removes · ⌘/Ctrl+D duplicates', ROOM.x1 - 8, H - 10);
+  ctx.fillText('Drag to move · Drag a wall\'s corner to resize · Arrows nudge · Delete removes · ⌘/Ctrl+D duplicates', W - 38, H - 10);
+  ctx.shadowBlur = 0;
   ctx.restore();
 }
 
